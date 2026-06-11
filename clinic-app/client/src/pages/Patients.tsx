@@ -2,198 +2,273 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { UserPlus, Search, ChevronRight, Loader2 } from 'lucide-react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { UserPlus, Search, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import { patientsApi } from '../lib/api';
-import { formatDate, formatPhone, fullName } from '../lib/utils';
-import Button from '../components/ui/Button';
+import { formatDate, formatPhone, cn } from '../lib/utils';
 import Card from '../components/ui/Card';
+import { StatusBadge } from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
 import type { Patient } from '../types';
 
-const GENDERS = ['Male', 'Female', 'Non-binary', 'Prefer not to say'];
-const STATES = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
+const patientSchema = z.object({
+  firstName: z.string().min(1, 'Required'),
+  lastName: z.string().min(1, 'Required'),
+  dob: z.string().min(1, 'Required'),
+  email: z.string().email('Invalid email').optional().or(z.literal('')),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zip: z.string().optional(),
+  emergencyContactName: z.string().optional(),
+  emergencyContactPhone: z.string().optional(),
+});
 
-function useDebounce(value: string, delay = 400) {
-  const [debouncedValue, setDebouncedValue] = useState(value);
-  useState(() => {
-    const handler = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(handler);
-  });
-  return debouncedValue;
+type PatientForm = z.infer<typeof patientSchema>;
+
+function InputField({ label, error, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string }) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <input
+        {...props}
+        className={cn(
+          'w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-blue-500',
+          error ? 'border-red-300' : 'border-gray-300'
+        )}
+      />
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+    </div>
+  );
 }
 
 export default function Patients() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [showAdd, setShowAdd] = useState(false);
-  const debouncedSearch = useDebounce(search);
+  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [status, setStatus] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const limit = 20;
 
   const { data, isLoading } = useQuery({
-    queryKey: ['patients', debouncedSearch, page],
-    queryFn: () => patientsApi.list({ search: debouncedSearch, page, limit: 20 }),
+    queryKey: ['patients', page, search, status],
+    queryFn: () => patientsApi.list({ page, limit, search: search || undefined, status: status || undefined }),
   });
 
-  const { register, handleSubmit, reset, formState: { isSubmitting, errors } } = useForm<any>();
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<PatientForm>({
+    resolver: zodResolver(patientSchema),
+  });
 
   const createMutation = useMutation({
-    mutationFn: patientsApi.create,
-    onSuccess: (p: Patient) => {
+    mutationFn: (d: PatientForm) => patientsApi.create(d),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['patients'] });
-      setShowAdd(false);
+      setModalOpen(false);
       reset();
-      navigate(`/patients/${p.id}`);
     },
   });
 
-  const patients: Patient[] = data?.patients ?? [];
-  const total: number = data?.total ?? 0;
-  const totalPages = Math.ceil(total / 20);
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    setSearch(searchInput);
+    setPage(1);
+  }
+
+  async function onSubmit(data: PatientForm) {
+    await createMutation.mutateAsync(data);
+  }
+
+  const patients = data?.data ?? [];
+  const totalPages = data?.totalPages ?? 1;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="relative w-80">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search name, MRN, phone..."
-            className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+    <div className="space-y-5">
+      {/* Header row */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          {/* Search */}
+          <form onSubmit={handleSearch} className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder="Search patients..."
+              className="pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
+            />
+          </form>
+          {/* Status filter */}
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            <select
+              value={status}
+              onChange={e => { setStatus(e.target.value); setPage(1); }}
+              className="pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white appearance-none"
+            >
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
         </div>
-        <Button icon={<UserPlus className="w-4 h-4" />} onClick={() => setShowAdd(true)}>
+        <button
+          onClick={() => setModalOpen(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <UserPlus className="w-4 h-4" />
           Add Patient
-        </Button>
+        </button>
       </div>
 
-      <Card>
+      {/* Table */}
+      <Card padding={false}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                {['Patient', 'MRN', 'DOB', 'Phone', 'Email', 'Visits', ''].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">{h}</th>
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                {['Patient', 'MRN', 'Date of Birth', 'Phone', 'Status', 'Last Visit', 'BMI', ''].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100 bg-white">
               {isLoading ? (
-                <tr><td colSpan={7} className="text-center py-12 text-gray-400"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></td></tr>
+                Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    {Array.from({ length: 8 }).map((_, j) => (
+                      <td key={j} className="px-4 py-3">
+                        <div className="h-4 bg-gray-200 rounded w-3/4" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
               ) : patients.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-12 text-gray-400">No patients found</td></tr>
-              ) : patients.map(p => (
-                <tr
-                  key={p.id}
-                  onClick={() => navigate(`/patients/${p.id}`)}
-                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-xs font-semibold shrink-0">
-                        {p.firstName[0]}{p.lastName[0]}
-                      </div>
-                      <span className="font-medium text-gray-900">{fullName(p)}</span>
-                    </div>
+                <tr>
+                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-gray-400">
+                    No patients found. Try adjusting your search.
                   </td>
-                  <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.mrn}</td>
-                  <td className="px-4 py-3 text-gray-600">{formatDate(p.dob)}</td>
-                  <td className="px-4 py-3 text-gray-600">{formatPhone(p.phone)}</td>
-                  <td className="px-4 py-3 text-gray-600">{p.email || '—'}</td>
-                  <td className="px-4 py-3 text-gray-600">{p._count?.appointments ?? 0}</td>
-                  <td className="px-4 py-3"><ChevronRight className="w-4 h-4 text-gray-400" /></td>
                 </tr>
-              ))}
+              ) : (
+                patients.map((p: Patient) => {
+                  const lastProgress = p.progressEntries?.[0];
+                  return (
+                    <tr
+                      key={p.id}
+                      className="hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => navigate(`/patients/${p.id}`)}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-xs font-bold shrink-0">
+                            {p.firstName[0]}{p.lastName[0]}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{p.firstName} {p.lastName}</p>
+                            <p className="text-xs text-gray-500">{p.email || '—'}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 font-mono">{p.mrn}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{formatDate(p.dob)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{formatPhone(p.phone)}</td>
+                      <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {lastProgress ? formatDate(lastProgress.date) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">
+                        {lastProgress?.bmi ? lastProgress.bmi.toFixed(1) : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={e => { e.stopPropagation(); navigate(`/patients/${p.id}`); }}
+                          className="text-blue-600 hover:text-blue-700 text-xs font-medium"
+                        >
+                          View →
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-            <span className="text-sm text-gray-500">{total} patients total</span>
+          <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
+            <p className="text-sm text-gray-500">
+              Page {page} of {totalPages} · {data?.total ?? 0} patients
+            </p>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</Button>
-              <span className="text-sm text-gray-600">{page} / {totalPages}</span>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next</Button>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-1.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="p-1.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
       </Card>
 
-      <Modal open={showAdd} onClose={() => { setShowAdd(false); reset(); }} title="Add New Patient" size="lg">
-        <form onSubmit={handleSubmit(d => createMutation.mutate(d))} className="space-y-4">
+      {/* Add Patient Modal */}
+      <Modal open={modalOpen} onClose={() => { setModalOpen(false); reset(); }} title="Add New Patient" size="lg">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {createMutation.isError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              Failed to create patient. Please try again.
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
-              <input {...register('firstName', { required: true })} className="input" />
-              {errors.firstName && <span className="text-xs text-red-500">Required</span>}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
-              <input {...register('lastName', { required: true })} className="input" />
-              {errors.lastName && <span className="text-xs text-red-500">Required</span>}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth *</label>
-              <input type="date" {...register('dob', { required: true })} className="input" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Gender *</label>
-              <select {...register('gender', { required: true })} className="input">
-                <option value="">Select...</option>
-                {GENDERS.map(g => <option key={g}>{g}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input type="email" {...register('email')} className="input" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-              <input type="tel" {...register('phone')} placeholder="(555) 000-0000" className="input" />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-              <input {...register('address')} className="input" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-              <input {...register('city')} className="input" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
-                <select {...register('state')} className="input">
-                  <option value="">—</option>
-                  {STATES.map(s => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ZIP</label>
-                <input {...register('zip')} className="input" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact Name</label>
-              <input {...register('emergencyContactName')} className="input" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact Phone</label>
-              <input type="tel" {...register('emergencyContactPhone')} className="input" />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-              <textarea {...register('notes')} rows={3} className="input" />
+            <InputField label="First Name *" {...register('firstName')} error={errors.firstName?.message} />
+            <InputField label="Last Name *" {...register('lastName')} error={errors.lastName?.message} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <InputField label="Date of Birth *" type="date" {...register('dob')} error={errors.dob?.message} />
+            <InputField label="Phone" type="tel" {...register('phone')} placeholder="(555) 555-5555" />
+          </div>
+          <InputField label="Email" type="email" {...register('email')} error={errors.email?.message} />
+          <InputField label="Address" {...register('address')} placeholder="123 Main St" />
+          <div className="grid grid-cols-3 gap-4">
+            <InputField label="City" {...register('city')} />
+            <InputField label="State" {...register('state')} placeholder="CA" maxLength={2} />
+            <InputField label="ZIP" {...register('zip')} />
+          </div>
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-sm font-medium text-gray-700 mb-3">Emergency Contact</p>
+            <div className="grid grid-cols-2 gap-4">
+              <InputField label="Name" {...register('emergencyContactName')} />
+              <InputField label="Phone" type="tel" {...register('emergencyContactPhone')} />
             </div>
           </div>
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="outline" type="button" onClick={() => { setShowAdd(false); reset(); }}>Cancel</Button>
-            <Button type="submit" loading={isSubmitting || createMutation.isPending}>Create Patient</Button>
+            <button type="button" onClick={() => { setModalOpen(false); reset(); }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={isSubmitting}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60 flex items-center gap-2">
+              {isSubmitting && <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              Create Patient
+            </button>
           </div>
         </form>
       </Modal>
-
-      <style>{`.input { @apply w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500; }`}</style>
     </div>
   );
 }

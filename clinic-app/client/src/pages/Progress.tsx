@@ -1,110 +1,209 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
+import { format, parseISO, subMonths } from 'date-fns';
+import { Search } from 'lucide-react';
 import { progressApi, patientsApi } from '../lib/api';
-import { formatDate, formatWeight, fullName, getBMICategory } from '../lib/utils';
+import { formatDate, formatWeight, formatBP, getBMICategory, cn } from '../lib/utils';
 import Card, { CardHeader, CardBody } from '../components/ui/Card';
+import type { ProgressEntry } from '../types';
+
+const BMI_RANGES = [
+  { label: 'Underweight (<18.5)', min: 0, max: 18.5 },
+  { label: 'Normal (18.5-24.9)', min: 18.5, max: 25 },
+  { label: 'Overweight (25-29.9)', min: 25, max: 30 },
+  { label: 'Obese I (30-34.9)', min: 30, max: 35 },
+  { label: 'Obese II (35-39.9)', min: 35, max: 40 },
+  { label: 'Obese III (40+)', min: 40, max: Infinity },
+];
 
 export default function Progress() {
-  const navigate = useNavigate();
-  const [patientSearch, setPatientSearch] = useState('');
+  const [patientFilter, setPatientFilter] = useState('');
+  const [startDate, setStartDate] = useState(
+    format(subMonths(new Date(), 3), 'yyyy-MM-dd')
+  );
+  const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
-  const { data: progressData } = useQuery({
-    queryKey: ['progress', 'clinic'],
-    queryFn: () => progressApi.list({ limit: 50 }),
+  const { data: progressData, isLoading } = useQuery({
+    queryKey: ['progress', 'all', patientFilter, startDate, endDate],
+    queryFn: () => progressApi.list({
+      limit: 100,
+      patientId: patientFilter || undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+    }),
   });
 
-  const entries = progressData?.entries ?? [];
-
-  const bmiGroups: Record<string, number> = {
-    'Normal (<25)': 0, 'Overweight (25-29)': 0, 'Obese I (30-34)': 0, 'Obese II (35-39)': 0, 'Obese III (40+)': 0,
-  };
-  entries.forEach((e: any) => {
-    if (!e.bmi) return;
-    if (e.bmi < 25) bmiGroups['Normal (<25)']++;
-    else if (e.bmi < 30) bmiGroups['Overweight (25-29)']++;
-    else if (e.bmi < 35) bmiGroups['Obese I (30-34)']++;
-    else if (e.bmi < 40) bmiGroups['Obese II (35-39)']++;
-    else bmiGroups['Obese III (40+)']++;
+  const { data: patientsData } = useQuery({
+    queryKey: ['patients', 'dropdown'],
+    queryFn: () => patientsApi.list({ limit: 200 }),
   });
-  const bmiChartData = Object.entries(bmiGroups).map(([name, value]) => ({ name, value }));
+
+  const entries = progressData?.data ?? [];
+
+  // BMI Distribution
+  const bmiDistribution = BMI_RANGES.map(range => ({
+    label: range.label.split('(')[0].trim(),
+    count: entries.filter(e => e.bmi && e.bmi >= range.min && e.bmi < range.max).length,
+  }));
+
+  // Average weight over time (group by week)
+  const weightOverTime = entries
+    .filter(e => e.weight)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .reduce<{ date: string; avg: number; count: number }[]>((acc, e) => {
+      const week = format(parseISO(e.date), 'MMM d');
+      const existing = acc.find(x => x.date === week);
+      if (existing) {
+        existing.avg = (existing.avg * existing.count + (e.weight ?? 0)) / (existing.count + 1);
+        existing.count++;
+      } else {
+        acc.push({ date: week, avg: e.weight ?? 0, count: 1 });
+      }
+      return acc;
+    }, [])
+    .map(x => ({ date: x.date, avgWeight: Math.round(x.avg * 10) / 10 }));
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div className="space-y-5">
+      {/* Filters */}
+      <Card>
+        <div className="flex flex-wrap gap-4 items-end">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Patient</label>
+            <select
+              value={patientFilter}
+              onChange={e => setPatientFilter(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[200px]"
+            >
+              <option value="">All Patients</option>
+              {(patientsData?.data ?? []).map(p => (
+                <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Start Date</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">End Date</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={e => setEndDate(e.target.value)}
+              className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="text-sm text-gray-500 pb-2">
+            {entries.length} entries found
+          </div>
+        </div>
+      </Card>
+
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <Card>
-          <CardHeader><h3 className="font-semibold text-gray-900">BMI Distribution</h3></CardHeader>
+          <CardHeader className="">
+            <h3 className="font-semibold text-gray-900">Average Weight Over Time</h3>
+          </CardHeader>
+          <CardBody>
+            {weightOverTime.length === 0 ? (
+              <div className="h-48 flex items-center justify-center text-sm text-gray-400">No data</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={weightOverTime}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} />
+                  <YAxis domain={['auto', 'auto']} tick={{ fontSize: 11, fill: '#9ca3af' }} />
+                  <Tooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                    formatter={(v: number) => [`${v} lbs`, 'Avg Weight']}
+                  />
+                  <Line type="monotone" dataKey="avgWeight" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader className="">
+            <h3 className="font-semibold text-gray-900">BMI Distribution</h3>
+          </CardHeader>
           <CardBody>
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={bmiChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={50} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Patients" />
+              <BarChart data={bmiDistribution} layout="vertical" margin={{ left: 80 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#9ca3af' }} allowDecimals={false} />
+                <YAxis dataKey="label" type="category" tick={{ fontSize: 11, fill: '#6b7280' }} width={80} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                <Bar dataKey="count" fill="#2563eb" radius={[0, 4, 4, 0]} name="Patients" />
               </BarChart>
             </ResponsiveContainer>
           </CardBody>
         </Card>
-        <Card>
-          <CardHeader><h3 className="font-semibold text-gray-900">Summary</h3></CardHeader>
-          <CardBody className="space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Total entries</span>
-              <span className="font-semibold">{progressData?.total ?? 0}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Entries with weight</span>
-              <span className="font-semibold">{entries.filter((e: any) => e.weight).length}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Average BMI</span>
-              <span className="font-semibold">
-                {entries.filter((e: any) => e.bmi).length
-                  ? (entries.filter((e: any) => e.bmi).reduce((s: number, e: any) => s + e.bmi, 0) / entries.filter((e: any) => e.bmi).length).toFixed(1)
-                  : '—'}
-              </span>
-            </div>
-          </CardBody>
-        </Card>
       </div>
 
-      <Card>
-        <CardHeader><h3 className="font-semibold text-gray-900">Recent Progress Entries</h3></CardHeader>
+      {/* Entries Table */}
+      <Card padding={false}>
+        <div className="px-4 py-3 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">Progress Entries</h3>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-100">
-                {['Patient', 'Date', 'Weight', 'BMI', 'BP', 'Glucose', 'Notes'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">{h}</th>
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                {['Patient', 'Date', 'Weight', 'BMI', 'Category', 'BP', 'Heart Rate', 'Notes'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody>
-              {entries.map((e: any) => (
-                <tr
-                  key={e.id}
-                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
-                  onClick={() => navigate(`/patients/${e.patientId}`)}
-                >
-                  <td className="px-4 py-3 font-medium text-gray-900">{e.patient ? fullName(e.patient) : '—'}</td>
-                  <td className="px-4 py-3 text-gray-600">{formatDate(e.date)}</td>
-                  <td className="px-4 py-3 font-medium">{formatWeight(e.weight)}</td>
-                  <td className="px-4 py-3">
-                    {e.bmi ? (
-                      <span className={getBMICategory(e.bmi).color}>{e.bmi.toFixed(1)}</span>
-                    ) : '—'}
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    {Array.from({ length: 8 }).map((_, j) => (
+                      <td key={j} className="px-4 py-3"><div className="h-4 bg-gray-200 rounded w-3/4" /></td>
+                    ))}
+                  </tr>
+                ))
+              ) : entries.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-10 text-center text-sm text-gray-400">
+                    No progress entries found for the selected filters
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{e.bloodPressure || '—'}</td>
-                  <td className="px-4 py-3 text-gray-600">{e.glucose ? `${e.glucose} mg/dL` : '—'}</td>
-                  <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{e.notes || '—'}</td>
                 </tr>
-              ))}
-              {!entries.length && (
-                <tr><td colSpan={7} className="text-center py-12 text-gray-400">No progress entries recorded yet</td></tr>
+              ) : (
+                entries.map((e: ProgressEntry) => {
+                  const bmiInfo = e.bmi ? getBMICategory(e.bmi) : null;
+                  return (
+                    <tr key={e.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                        {e.patient?.firstName} {e.patient?.lastName}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700">{formatDate(e.date)}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{formatWeight(e.weight)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700">{e.bmi?.toFixed(1) ?? '—'}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {bmiInfo ? (
+                          <span className={cn('font-medium', bmiInfo.color)}>{bmiInfo.label}</span>
+                        ) : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700">{formatBP(e.bloodPressureSystolic, e.bloodPressureDiastolic)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700">{e.heartRate ? `${e.heartRate} bpm` : '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate">{e.notes || '—'}</td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

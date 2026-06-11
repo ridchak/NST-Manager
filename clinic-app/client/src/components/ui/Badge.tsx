@@ -28,13 +28,15 @@ export default function Badge({ variant = 'neutral', className, children }: Badg
 export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, Variant> = {
     scheduled: 'info', confirmed: 'success', completed: 'neutral',
-    cancelled: 'danger', 'no-show': 'warning',
+    cancelled: 'danger', 'no-show': 'warning', no_show: 'warning',
     pending: 'warning', approved: 'success', denied: 'danger', expired: 'neutral',
     submitted: 'info', reviewed: 'success',
     Inbound: 'info', Outbound: 'neutral',
+    active: 'success', inactive: 'neutral', archived: 'danger',
   };
-  const label: Record<string, string> = {
-    'no-show': 'No Show',
-  };
-  return <Badge variant={map[status] || 'neutral'}>{label[status] || status}</Badge>;
+  const label = status
+    .replace(/_/g, ' ')
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+  return <Badge variant={map[status] || 'neutral'}>{label}</Badge>;
 }

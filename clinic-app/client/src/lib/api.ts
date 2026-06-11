@@ -27,7 +27,7 @@ export const authApi = {
 };
 
 export const patientsApi = {
-  list: (params?: { search?: string; page?: number; limit?: number }) => api.get('/patients', { params }).then(r => r.data),
+  list: (params?: { search?: string; page?: number; limit?: number; status?: string }) => api.get('/patients', { params }).then(r => r.data),
   get: (id: string) => api.get(`/patients/${id}`).then(r => r.data),
   getStats: (id: string) => api.get(`/patients/${id}/stats`).then(r => r.data),
   create: (data: any) => api.post('/patients', data).then(r => r.data),

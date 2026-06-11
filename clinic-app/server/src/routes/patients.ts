@@ -4,10 +4,16 @@ import prisma from '../lib/prisma';
 
 const router = Router();
 
+function transformPatient(p: any) {
+  return { ...p, status: 'active', insurances: p.insuranceInfos ?? [] };
+}
+
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { search = '', page = '1', limit = '20' } = req.query as Record<string, string>;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
     const where = search
       ? {
           OR: [
@@ -23,17 +29,19 @@ router.get('/', async (req: Request, res: Response) => {
       prisma.patient.findMany({
         where,
         skip,
-        take: parseInt(limit),
+        take: limitNum,
         orderBy: { lastName: 'asc' },
         include: {
           _count: { select: { appointments: true, progressEntries: true } },
           progressEntries: { orderBy: { date: 'desc' }, take: 1 },
           appointments: { orderBy: { date: 'desc' }, take: 1, where: { status: { in: ['completed', 'scheduled', 'confirmed'] } } },
+          insuranceInfos: true,
         },
       }),
       prisma.patient.count({ where }),
     ]);
-    res.json({ patients, total, page: parseInt(page), limit: parseInt(limit) });
+    const totalPages = Math.ceil(total / limitNum) || 1;
+    res.json({ data: patients.map(transformPatient), total, page: pageNum, limit: limitNum, totalPages });
   } catch {
     res.status(500).json({ error: 'Failed to fetch patients' });
   }
@@ -53,7 +61,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       },
     });
     if (!patient) return res.status(404).json({ error: 'Patient not found' });
-    res.json(patient);
+    res.json(transformPatient(patient));
   } catch {
     res.status(500).json({ error: 'Failed to fetch patient' });
   }
@@ -86,7 +94,7 @@ const patientSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   dob: z.string(),
-  gender: z.string(),
+  gender: z.string().optional().default(''),
   email: z.string().email().optional().or(z.literal('')),
   phone: z.string().optional(),
   address: z.string().optional(),
@@ -109,7 +117,7 @@ router.post('/', async (req: Request, res: Response) => {
     const patient = await prisma.patient.create({
       data: { ...data, mrn: generateMRN(), dob: new Date(data.dob), email: data.email || null },
     });
-    res.status(201).json(patient);
+    res.status(201).json(transformPatient(patient));
   } catch (err: any) {
     if (err.name === 'ZodError') return res.status(400).json({ error: err.errors });
     res.status(500).json({ error: 'Failed to create patient' });
@@ -123,7 +131,7 @@ router.put('/:id', async (req: Request, res: Response) => {
       where: { id: req.params.id },
       data: { ...data, dob: data.dob ? new Date(data.dob) : undefined, email: data.email || null },
     });
-    res.json(patient);
+    res.json(transformPatient(patient));
   } catch (err: any) {
     if (err.name === 'ZodError') return res.status(400).json({ error: err.errors });
     if (err.code === 'P2025') return res.status(404).json({ error: 'Patient not found' });

@@ -1,202 +1,277 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
-import { format, parse, startOfWeek, getDay, addHours } from 'date-fns';
-import { enUS } from 'date-fns/locale';
-import { Plus } from 'lucide-react';
+import { Calendar as BigCalendar, momentLocalizer, Views } from 'react-big-calendar';
+import moment from 'moment';
 import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Plus } from 'lucide-react';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { appointmentsApi, patientsApi } from '../lib/api';
-import { getApptTypeColor, fullName } from '../lib/utils';
-import Button from '../components/ui/Button';
+import { getAppointmentTypeColor, cn } from '../lib/utils';
+import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import { StatusBadge } from '../components/ui/Badge';
 import type { Appointment } from '../types';
-import 'react-big-calendar/lib/css/react-big-calendar.css';
 
-const localizer = dateFnsLocalizer({
-  format,
-  parse,
-  startOfWeek: () => startOfWeek(new Date(), { weekStartsOn: 0 }),
-  getDay,
-  locales: { 'en-US': enUS },
+const localizer = momentLocalizer(moment);
+
+const apptSchema = z.object({
+  patientId: z.string().min(1, 'Patient required'),
+  startTime: z.string().min(1, 'Start time required'),
+  endTime: z.string().min(1, 'End time required'),
+  type: z.enum(['initial', 'followup', 'nutrition', 'procedure', 'phone']),
+  status: z.enum(['scheduled', 'confirmed', 'completed', 'cancelled', 'no_show']).default('scheduled'),
+  reason: z.string().optional(),
+  notes: z.string().optional(),
 });
 
-const APPT_TYPES = ['initial-consult', 'follow-up', 'weigh-in', 'nutrition', 'procedure', 'telehealth'];
-const DURATIONS = [15, 30, 45, 60, 90, 120];
+type ApptForm = z.infer<typeof apptSchema>;
+
+interface CalendarEvent {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  resource: Appointment;
+}
+
+function typeColorStyle(type: string): React.CSSProperties {
+  const colors: Record<string, string> = {
+    initial: '#2563eb',
+    followup: '#16a34a',
+    nutrition: '#ea580c',
+    procedure: '#7c3aed',
+    phone: '#6b7280',
+  };
+  return { backgroundColor: colors[type] ?? '#6b7280', border: 'none' };
+}
 
 export default function Schedule() {
   const qc = useQueryClient();
-  const [showNew, setShowNew] = useState(false);
-  const [selected, setSelected] = useState<Appointment | null>(null);
-  const [range, setRange] = useState<{ start: Date; end: Date }>({
-    start: new Date(new Date().setDate(1)),
-    end: new Date(new Date().setMonth(new Date().getMonth() + 1, 0)),
+  const [view, setView] = useState<string>(Views.WEEK);
+  const [date, setDate] = useState(new Date());
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedAppt, setSelectedAppt] = useState<Appointment | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  const { data: apptData, isLoading } = useQuery({
+    queryKey: ['appointments', 'all'],
+    queryFn: () => appointmentsApi.list({ limit: 200 }),
   });
 
-  const { data } = useQuery({
-    queryKey: ['appointments', 'calendar', range.start.toISOString(), range.end.toISOString()],
-    queryFn: () => appointmentsApi.list({
-      startDate: range.start.toISOString(),
-      endDate: range.end.toISOString(),
-      limit: 200,
-    }),
-  });
-
-  const { data: patients } = useQuery({
-    queryKey: ['patients', 'all'],
+  const { data: patientsData } = useQuery({
+    queryKey: ['patients', 'dropdown'],
     queryFn: () => patientsApi.list({ limit: 200 }),
   });
 
-  const { data: providers } = useQuery({
-    queryKey: ['providers'],
-    queryFn: () => import('../lib/api').then(m => m.authApi.getMe()),
-  });
-
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<any>({
-    defaultValues: { duration: 30, type: 'follow-up', status: 'scheduled' },
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ApptForm>({
+    resolver: zodResolver(apptSchema),
+    defaultValues: { type: 'followup', status: 'scheduled' },
   });
 
   const createMutation = useMutation({
-    mutationFn: appointmentsApi.create,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['appointments'] }); setShowNew(false); reset(); },
+    mutationFn: (d: ApptForm) => appointmentsApi.create(d),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['appointments'] });
+      setModalOpen(false);
+      reset();
+    },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: any) => appointmentsApi.update(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['appointments'] }); setSelected(null); },
-  });
-
-  const events = (data?.appointments ?? []).map((a: Appointment) => ({
+  const events: CalendarEvent[] = (apptData?.data ?? []).map(a => ({
     id: a.id,
-    title: `${a.patient ? fullName(a.patient) : ''} — ${a.type.replace(/-/g, ' ')}`,
-    start: new Date(a.date),
-    end: addHours(new Date(a.date), a.duration / 60),
+    title: `${a.patient?.firstName ?? ''} ${a.patient?.lastName ?? ''} — ${a.type}`,
+    start: new Date(a.startTime),
+    end: new Date(a.endTime),
     resource: a,
   }));
 
-  const eventStyle = useCallback((event: any) => ({
-    style: {
-      backgroundColor: getApptTypeColor(event.resource.type),
-      borderRadius: '4px',
-      border: 'none',
-      fontSize: '12px',
-      opacity: event.resource.status === 'cancelled' ? 0.5 : 1,
-    },
-  }), []);
-
-  const onRangeChange = useCallback((r: any) => {
-    if (Array.isArray(r)) {
-      setRange({ start: r[0], end: r[r.length - 1] });
-    } else {
-      setRange({ start: r.start, end: r.end });
-    }
-  }, []);
+  function handleSelectEvent(event: CalendarEvent) {
+    setSelectedAppt(event.resource);
+    setDetailOpen(true);
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowNew(true)}>New Appointment</Button>
-      </div>
-
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4" style={{ height: 680 }}>
-        <Calendar
-          localizer={localizer}
-          events={events}
-          defaultView={Views.WEEK}
-          views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]}
-          onRangeChange={onRangeChange}
-          onSelectEvent={(e: any) => setSelected(e.resource)}
-          eventPropGetter={eventStyle}
-          step={15}
-          timeslots={4}
-        />
+        <button
+          onClick={() => setModalOpen(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+        >
+          <Plus className="w-4 h-4" /> New Appointment
+        </button>
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap gap-4 text-xs text-gray-600">
-        {APPT_TYPES.map(t => (
-          <div key={t} className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: getApptTypeColor(t) }} />
-            {t.replace(/-/g, ' ')}
+      <div className="flex items-center gap-4 flex-wrap">
+        {[
+          { type: 'initial', label: 'Initial', color: '#2563eb' },
+          { type: 'followup', label: 'Follow-up', color: '#16a34a' },
+          { type: 'nutrition', label: 'Nutrition', color: '#ea580c' },
+          { type: 'procedure', label: 'Procedure', color: '#7c3aed' },
+          { type: 'phone', label: 'Phone', color: '#6b7280' },
+        ].map(({ type, label, color }) => (
+          <div key={type} className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+            <span className="text-xs text-gray-600">{label}</span>
           </div>
         ))}
       </div>
 
+      <Card padding={false} className="overflow-hidden">
+        {isLoading ? (
+          <div className="h-[600px] flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          </div>
+        ) : (
+          <div className="p-4" style={{ height: '680px' }}>
+            <BigCalendar
+              localizer={localizer}
+              events={events}
+              view={view as Parameters<typeof BigCalendar>[0]['view']}
+              onView={v => setView(v)}
+              date={date}
+              onNavigate={d => setDate(d)}
+              onSelectEvent={handleSelectEvent}
+              views={[Views.MONTH, Views.WEEK, Views.DAY, Views.AGENDA]}
+              eventPropGetter={event => ({
+                style: typeColorStyle(event.resource.type),
+              })}
+              popup
+              step={30}
+              timeslots={2}
+            />
+          </div>
+        )}
+      </Card>
+
       {/* New Appointment Modal */}
-      <Modal open={showNew} onClose={() => { setShowNew(false); reset(); }} title="New Appointment" size="md">
-        <form onSubmit={handleSubmit(d => createMutation.mutate({ ...d, date: new Date(d.date).toISOString(), duration: Number(d.duration) }))} className="space-y-4">
+      <Modal open={modalOpen} onClose={() => { setModalOpen(false); reset(); }} title="New Appointment" size="lg">
+        <form onSubmit={handleSubmit(d => createMutation.mutateAsync(d))} className="space-y-4">
+          {createMutation.isError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              Failed to create appointment. Please try again.
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Patient *</label>
-            <select {...register('patientId', { required: true })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">Select patient...</option>
-              {(patients?.patients ?? []).map((p: any) => (
-                <option key={p.id} value={p.id}>{fullName(p)} — {p.mrn}</option>
+            <select
+              {...register('patientId')}
+              className={cn('w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white',
+                errors.patientId ? 'border-red-300' : 'border-gray-300')}
+            >
+              <option value="">Select a patient...</option>
+              {(patientsData?.data ?? []).map(p => (
+                <option key={p.id} value={p.id}>{p.firstName} {p.lastName} — {p.mrn}</option>
               ))}
             </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Provider *</label>
-            <input {...register('providerId', { required: true })} placeholder="Provider ID" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            {errors.patientId && <p className="mt-1 text-xs text-red-600">{errors.patientId.message}</p>}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date & Time *</label>
-              <input type="datetime-local" {...register('date', { required: true })} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
+              <input type="datetime-local" {...register('startTime')}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              {errors.startTime && <p className="mt-1 text-xs text-red-600">{errors.startTime.message}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Duration (min)</label>
-              <select {...register('duration')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {DURATIONS.map(d => <option key={d} value={d}>{d} min</option>)}
-              </select>
+              <label className="block text-sm font-medium text-gray-700 mb-1">End Time *</label>
+              <input type="datetime-local" {...register('endTime')}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              {errors.endTime && <p className="mt-1 text-xs text-red-600">{errors.endTime.message}</p>}
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-              <select {...register('type')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {APPT_TYPES.map(t => <option key={t} value={t}>{t.replace(/-/g, ' ')}</option>)}
+              <select {...register('type')}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <option value="initial">Initial Visit</option>
+                <option value="followup">Follow-up</option>
+                <option value="nutrition">Nutrition Consult</option>
+                <option value="procedure">Procedure</option>
+                <option value="phone">Phone Visit</option>
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select {...register('status')} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {['scheduled', 'confirmed'].map(s => <option key={s}>{s}</option>)}
+              <select {...register('status')}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <option value="scheduled">Scheduled</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
               </select>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Reason for visit</label>
-            <textarea {...register('reason')} rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reason</label>
+            <input {...register('reason')} placeholder="Reason for visit..."
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" type="button" onClick={() => { setShowNew(false); reset(); }}>Cancel</Button>
-            <Button type="submit" loading={isSubmitting || createMutation.isPending}>Book Appointment</Button>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+            <textarea {...register('notes')} rows={2} placeholder="Additional notes..."
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => { setModalOpen(false); reset(); }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+            <button type="submit" disabled={isSubmitting}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60 flex items-center gap-2">
+              {isSubmitting && <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              Create Appointment
+            </button>
           </div>
         </form>
       </Modal>
 
-      {/* Appointment Detail Modal */}
-      {selected && (
-        <Modal open={!!selected} onClose={() => setSelected(null)} title="Appointment Details" size="md">
+      {/* Detail Modal */}
+      {selectedAppt && (
+        <Modal open={detailOpen} onClose={() => setDetailOpen(false)} title="Appointment Details">
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-gray-500">Patient:</span><div className="font-medium">{selected.patient ? fullName(selected.patient) : '—'}</div></div>
-              <div><span className="text-gray-500">MRN:</span><div className="font-medium font-mono">{selected.patient?.mrn}</div></div>
-              <div><span className="text-gray-500">Date/Time:</span><div className="font-medium">{format(new Date(selected.date), 'MMM d, yyyy h:mm a')}</div></div>
-              <div><span className="text-gray-500">Duration:</span><div className="font-medium">{selected.duration} min</div></div>
-              <div><span className="text-gray-500">Type:</span><div className="font-medium capitalize">{selected.type.replace(/-/g, ' ')}</div></div>
-              <div><span className="text-gray-500">Status:</span><StatusBadge status={selected.status} /></div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-700 font-bold text-sm">
+                {selectedAppt.patient?.firstName?.[0]}{selectedAppt.patient?.lastName?.[0]}
+              </div>
+              <div>
+                <p className="font-semibold text-gray-900">
+                  {selectedAppt.patient?.firstName} {selectedAppt.patient?.lastName}
+                </p>
+                <p className="text-sm text-gray-500">MRN: {selectedAppt.patient?.mrn}</p>
+              </div>
             </div>
-            {selected.reason && <div className="text-sm"><span className="text-gray-500">Reason:</span><p className="mt-1">{selected.reason}</p></div>}
-          </div>
-          <div className="flex justify-between mt-6">
-            <Button variant="danger" size="sm" onClick={() => updateMutation.mutate({ id: selected.id, data: { status: 'cancelled' } })}>Cancel Appt</Button>
-            <div className="flex gap-2">
-              {selected.status === 'scheduled' && (
-                <Button variant="outline" size="sm" onClick={() => updateMutation.mutate({ id: selected.id, data: { status: 'confirmed' } })}>Confirm</Button>
-              )}
-              {selected.status !== 'completed' && selected.status !== 'cancelled' && (
-                <Button size="sm" onClick={() => updateMutation.mutate({ id: selected.id, data: { status: 'completed' } })}>Mark Complete</Button>
-              )}
+            <div className="grid grid-cols-2 gap-3 bg-gray-50 rounded-lg p-3">
+              <div>
+                <p className="text-xs text-gray-500">Type</p>
+                <StatusBadge status={selectedAppt.type} />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Status</p>
+                <StatusBadge status={selectedAppt.status} />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Start</p>
+                <p className="text-sm font-medium">{moment(selectedAppt.startTime).format('MMM D, YYYY h:mm A')}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">End</p>
+                <p className="text-sm font-medium">{moment(selectedAppt.endTime).format('h:mm A')}</p>
+              </div>
             </div>
+            {selectedAppt.reason && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Reason</p>
+                <p className="text-sm text-gray-800">{selectedAppt.reason}</p>
+              </div>
+            )}
+            {selectedAppt.notes && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Notes</p>
+                <p className="text-sm text-gray-800">{selectedAppt.notes}</p>
+              </div>
+            )}
           </div>
         </Modal>
       )}

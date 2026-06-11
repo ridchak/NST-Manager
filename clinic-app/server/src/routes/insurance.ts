@@ -58,7 +58,8 @@ router.get('/', async (req: Request, res: Response) => {
       diagnosisCodes: JSON.parse(a.diagnosisCodes),
       procedureCodes: JSON.parse(a.procedureCodes),
     }));
-    res.json({ auths: parsed, total });
+    const totalPages = Math.ceil(total / parseInt(limit)) || 1;
+    res.json({ data: parsed, total, page: parseInt(page), limit: parseInt(limit), totalPages });
   } catch {
     res.status(500).json({ error: 'Failed to fetch authorizations' });
   }

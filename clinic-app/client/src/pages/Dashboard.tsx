@@ -116,11 +116,11 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardBody className="p-0">
-            {!recentProgress?.entries?.length ? (
+            {!recentProgress?.data?.length ? (
               <div className="text-center py-8 text-gray-400 text-sm">No recent entries</div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {recentProgress.entries.map((e: any) => (
+                {recentProgress.data.map((e: any) => (
                   <div
                     key={e.id}
                     className="flex items-center justify-between px-6 py-3 hover:bg-gray-50 cursor-pointer"

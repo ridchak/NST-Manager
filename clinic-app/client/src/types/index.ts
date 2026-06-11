@@ -23,12 +23,14 @@ export interface Patient {
   emergencyContactPhone?: string;
   notes?: string;
   ecwId?: string;
+  status?: string;
   createdAt: string;
   updatedAt: string;
   appointments?: Appointment[];
   progressEntries?: ProgressEntry[];
   intakeForms?: IntakeForm[];
   insuranceInfos?: InsuranceInfo[];
+  insurances?: InsuranceInfo[];
   insuranceAuths?: InsuranceAuth[];
   _count?: { appointments: number; progressEntries: number };
 }
@@ -39,8 +41,10 @@ export interface Appointment {
   providerId: string;
   date: string;
   duration: number;
-  type: 'initial-consult' | 'follow-up' | 'weigh-in' | 'nutrition' | 'procedure' | 'telehealth';
-  status: 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no-show';
+  startTime: string;
+  endTime: string;
+  type: string;
+  status: string;
   reason?: string;
   notes?: string;
   ecwId?: string;
@@ -56,9 +60,12 @@ export interface ProgressEntry {
   weight?: number;
   bmi?: number;
   waist?: number;
+  waistCircumference?: number;
   hips?: number;
   neck?: number;
   bloodPressure?: string;
+  bloodPressureSystolic?: number;
+  bloodPressureDiastolic?: number;
   heartRate?: number;
   glucose?: number;
   a1c?: number;

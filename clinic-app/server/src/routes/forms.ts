@@ -35,7 +35,7 @@ const FORM_TEMPLATES: Record<string, { title: string; fields: any[] }> = {
   consent: {
     title: 'Treatment Consent',
     fields: [
-      { id: 'treatmentConsent', label: 'I consent to treatment at LifeStart Weight Loss Clinic', type: 'checkbox', required: true },
+      { id: 'treatmentConsent', label: 'I consent to treatment at the Weight Loss Clinic', type: 'checkbox', required: true },
       { id: 'riskAcknowledgment', label: 'I acknowledge the risks and benefits of the proposed treatment plan', type: 'checkbox', required: true },
       { id: 'financialResponsibility', label: 'I accept financial responsibility for services rendered', type: 'checkbox', required: true },
       { id: 'signature', label: 'Electronic Signature (Full Name)', type: 'text', required: true },
@@ -54,6 +54,21 @@ const FORM_TEMPLATES: Record<string, { title: string; fields: any[] }> = {
   },
 };
 
+function transformForm(f: any) {
+  let parsedData = f.data;
+  if (typeof parsedData === 'string') {
+    try { parsedData = JSON.parse(parsedData); } catch { parsedData = {}; }
+  }
+  return {
+    ...f,
+    type: f.formType,
+    sentAt: f.createdAt,
+    completedAt: f.submittedAt ?? null,
+    expiresAt: null,
+    data: parsedData,
+  };
+}
+
 router.get('/templates', (_req: Request, res: Response) => {
   const templates = Object.entries(FORM_TEMPLATES).map(([id, t]) => ({ id, ...t }));
   res.json(templates);
@@ -68,7 +83,9 @@ router.get('/templates/:type', (req: Request, res: Response) => {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { patientId, status, formType, page = '1', limit = '20' } = req.query as Record<string, string>;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
     const where: any = {};
     if (patientId) where.patientId = patientId;
     if (status) where.status = status;
@@ -77,13 +94,14 @@ router.get('/', async (req: Request, res: Response) => {
       prisma.intakeForm.findMany({
         where,
         skip,
-        take: parseInt(limit),
+        take: limitNum,
         orderBy: { createdAt: 'desc' },
         include: { patient: { select: { id: true, firstName: true, lastName: true, mrn: true } } },
       }),
       prisma.intakeForm.count({ where }),
     ]);
-    res.json({ forms, total });
+    const totalPages = Math.ceil(total / limitNum) || 1;
+    res.json({ data: forms.map(transformForm), total, page: pageNum, limit: limitNum, totalPages });
   } catch {
     res.status(500).json({ error: 'Failed to fetch forms' });
   }
@@ -96,7 +114,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       include: { patient: { select: { id: true, firstName: true, lastName: true, mrn: true } } },
     });
     if (!form) return res.status(404).json({ error: 'Form not found' });
-    res.json({ ...form, data: JSON.parse(form.data) });
+    res.json(transformForm(form));
   } catch {
     res.status(500).json({ error: 'Failed to fetch form' });
   }
@@ -121,7 +139,7 @@ router.post('/', async (req: Request, res: Response) => {
       },
       include: { patient: { select: { id: true, firstName: true, lastName: true } } },
     });
-    res.status(201).json({ ...form, data });
+    res.status(201).json(transformForm(form));
   } catch (err: any) {
     if (err.name === 'ZodError') return res.status(400).json({ error: err.errors });
     res.status(500).json({ error: 'Failed to create form' });
@@ -143,7 +161,7 @@ router.put('/:id', async (req: Request, res: Response) => {
         ...(status === 'submitted' && { submittedAt: new Date() }),
       },
     });
-    res.json(form);
+    res.json(transformForm(form));
   } catch (err: any) {
     if (err.name === 'ZodError') return res.status(400).json({ error: err.errors });
     if (err.code === 'P2025') return res.status(404).json({ error: 'Form not found' });
