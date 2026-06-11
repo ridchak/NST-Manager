@@ -1,1 +1,8 @@
-.DS_Store
+.claude/worktrees/
+node_modules/
+dist/
+build/
+*.env
+.env
+clinic-app/server/prisma/dev.db
+clinic-app/server/prisma/dev.db-journal
