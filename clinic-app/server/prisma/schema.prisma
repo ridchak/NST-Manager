@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  password     String
+  name         String
+  role         String        @default("provider") // admin | provider | staff
+  createdAt    DateTime      @default(now())
+  appointments Appointment[]
+}
+
+model Patient {
+  id                    String          @id @default(cuid())
+  mrn                   String          @unique
+  firstName             String
+  lastName              String
+  dob                   DateTime
+  gender                String
+  email                 String?
+  phone                 String?
+  address               String?
+  city                  String?
+  state                 String?
+  zip                   String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  notes                 String?
+  ecwId                 String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  appointments          Appointment[]
+  progressEntries       ProgressEntry[]
+  intakeForms           IntakeForm[]
+  insuranceInfos        InsuranceInfo[]
+  insuranceAuths        InsuranceAuth[]
+  documents             Document[]
+}
+
+model Appointment {
+  id        String   @id @default(cuid())
+  patientId String
+  providerId String
+  date      DateTime
+  duration  Int      @default(30) // minutes
+  type      String   // initial-consult | follow-up | weigh-in | procedure
+  status    String   @default("scheduled") // scheduled | confirmed | completed | cancelled | no-show
+  reason    String?
+  notes     String?
+  ecwId     String?
+  createdAt DateTime @default(now())
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  provider  User     @relation(fields: [providerId], references: [id])
+}
+
+model ProgressEntry {
+  id            String   @id @default(cuid())
+  patientId     String
+  date          DateTime
+  weight        Float?   // lbs
+  bmi           Float?
+  waist         Float?   // inches
+  hips          Float?   // inches
+  neck          Float?   // inches
+  bloodPressure String?  // e.g. "120/80"
+  heartRate     Int?
+  glucose       Float?   // mg/dL
+  a1c           Float?   // percentage
+  notes         String?
+  createdAt     DateTime @default(now())
+  patient       Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model IntakeForm {
+  id          String    @id @default(cuid())
+  patientId   String
+  formType    String    // initial-intake | medical-history | consent | hipaa
+  status      String    @default("pending") // pending | submitted | reviewed
+  submittedAt DateTime?
+  data        String    @default("{}") // JSON stored as string for SQLite
+  createdAt   DateTime  @default(now())
+  patient     Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model InsuranceInfo {
+  id             String          @id @default(cuid())
+  patientId      String
+  insuranceName  String
+  insuranceId    String
+  groupNumber    String?
+  subscriberName String?
+  isPrimary      Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  patient        Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  auths          InsuranceAuth[]
+}
+
+model InsuranceAuth {
+  id             String        @id @default(cuid())
+  patientId      String
+  insuranceId    String
+  authNumber     String?
+  serviceType    String
+  diagnosisCodes String        @default("[]") // JSON array stored as string
+  procedureCodes String        @default("[]") // JSON array stored as string
+  requestDate    DateTime      @default(now())
+  startDate      DateTime?
+  endDate        DateTime?
+  status         String        @default("pending") // pending | approved | denied | expired
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  patient        Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  insurance      InsuranceInfo @relation(fields: [insuranceId], references: [id])
+  documents      Document[]
+}
+
+model Document {
+  id        String         @id @default(cuid())
+  patientId String
+  authId    String?
+  name      String
+  type      String         // lab-result | auth-letter | consent | id | insurance-card | other
+  url       String
+  createdAt DateTime       @default(now())
+  patient   Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  auth      InsuranceAuth? @relation(fields: [authId], references: [id])
+}

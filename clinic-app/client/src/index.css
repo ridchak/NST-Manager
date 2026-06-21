@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { @apply h-full; }
+  body { @apply h-full bg-gray-50 text-gray-900 antialiased; }
+  #root { @apply h-full; }
+}
+
+@layer utilities {
+  .scrollbar-thin { scrollbar-width: thin; }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-track { @apply bg-gray-100; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded; }
+}
+
+/* react-big-calendar overrides */
+.rbc-calendar { font-family: inherit; }
+.rbc-header { @apply bg-gray-50 text-gray-600 text-sm font-medium py-2; border-bottom: 1px solid #e5e7eb !important; }
+.rbc-event { @apply rounded text-xs font-medium; }
+.rbc-today { @apply bg-blue-50; }
+.rbc-toolbar button { @apply text-sm text-gray-700 border border-gray-300 px-3 py-1.5 rounded hover:bg-gray-50; }
+.rbc-toolbar button.rbc-active { @apply bg-blue-600 text-white border-blue-600; }
