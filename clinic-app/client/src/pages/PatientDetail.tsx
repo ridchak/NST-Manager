@@ -139,7 +139,9 @@ export default function PatientDetail() {
     );
   }
 
-  const latestProgress = progressData?.data?.[0];
+  // Use already-loaded progressEntries from the patient object for the header,
+  // fall back to the lazy progress query once the tab has been visited.
+  const latestProgress = progressData?.data?.[0] ?? patient?.progressEntries?.[0];
   const bmiValue = latestProgress?.bmi ?? 0;
   const bmiInfo = getBMICategory(bmiValue);
   const chartPoints = (chartData ?? []).map(e => ({

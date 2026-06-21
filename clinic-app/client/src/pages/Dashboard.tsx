@@ -95,7 +95,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-sm text-gray-600">{formatTime(appt.date)}</span>
+                      <span className="text-sm text-gray-600">{formatTime(appt.startTime)}</span>
                       <StatusBadge status={appt.status} />
                     </div>
                   </div>

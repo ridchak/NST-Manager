@@ -134,14 +134,15 @@ router.put('/:id', async (req: Request, res: Response) => {
       procedureCodes: z.array(z.string()).optional(),
     });
     const data = updateSchema.parse(req.body);
+    const { diagnosisCodes, procedureCodes, startDate, endDate, ...rest } = data;
     const auth = await prisma.insuranceAuth.update({
       where: { id: req.params.id },
       data: {
-        ...data,
-        ...(data.diagnosisCodes && { diagnosisCodes: JSON.stringify(data.diagnosisCodes) }),
-        ...(data.procedureCodes && { procedureCodes: JSON.stringify(data.procedureCodes) }),
-        ...(data.startDate && { startDate: new Date(data.startDate) }),
-        ...(data.endDate && { endDate: new Date(data.endDate) }),
+        ...rest,
+        ...(diagnosisCodes !== undefined && { diagnosisCodes: JSON.stringify(diagnosisCodes) }),
+        ...(procedureCodes !== undefined && { procedureCodes: JSON.stringify(procedureCodes) }),
+        ...(startDate && { startDate: new Date(startDate) }),
+        ...(endDate && { endDate: new Date(endDate) }),
       },
     });
     res.json({

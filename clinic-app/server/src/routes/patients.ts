@@ -11,8 +11,8 @@ function transformPatient(p: any) {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { search = '', page = '1', limit = '20' } = req.query as Record<string, string>;
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(limit) || 20));
     const skip = (pageNum - 1) * limitNum;
     const where = search
       ? {
