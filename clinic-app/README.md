@@ -52,12 +52,35 @@ npm run dev          # server on :4000
 cd ../client && npm run dev   # client on :5173
 ```
 
-### Default Login Credentials
+### Demo logins (development only)
 
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@nstclinic.com | admin123 |
-| Provider | dr.smith@nstclinic.com | provider123 |
+| Access level | Email | Password |
+|-------|-------|----------|
+| Superuser | admin@nstclinic.com | admin123 |
+| Admin (prescriber) | dr.smith@nstclinic.com | provider123 |
+| User | frontdesk@nstclinic.com | frontdesk123 |
+
+These exist only in the demo seed, which refuses to run when `NODE_ENV=production`.
+For a real deployment create your own superuser instead:
+
+```bash
+cd server
+SUPERUSER_PASSWORD="a-long-passphrase" npm run create-superuser -- you@yourclinic.com "Your Name"
+```
+
+## Access levels and sign-in lockout
+
+| Level | Can do |
+|-------|--------|
+| **User** | View records and add new ones. Cannot edit existing records or delete. (May cancel an appointment and mark staff messages done.) |
+| **Admin** | Everything a user can do, plus edit existing records, including insurance authorizations. |
+| **Superuser** | Full control: delete records, add/deactivate accounts, change access levels, reset passwords, unlock accounts. |
+
+- The rules live in one short file, `server/src/services/access.ts`, and are enforced on every API request.
+- Access levels are checked against the database on each request, so a change or deactivation takes effect immediately.
+- **5 failed sign-ins lock the account for 30 minutes** (`LOGIN_MAX_ATTEMPTS`, `LOGIN_LOCK_MINUTES`). A locked account refuses even the correct password. A superuser can unlock it at **Settings → Users**.
+- Passwords must be at least 10 characters. Sessions last 12 hours.
+- Manage accounts at **Settings → Users** (superuser only). Accounts with appointment history are deactivated rather than deleted.
 
 ## Integrations
 

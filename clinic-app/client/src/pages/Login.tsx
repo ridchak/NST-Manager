@@ -32,10 +32,17 @@ export default function Login() {
       await login(data.email, data.password);
       navigate('/');
     } catch (err: unknown) {
-      const msg = err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
-        : null;
-      setError(msg ?? 'Invalid email or password. Please try again.');
+      const data = (err as { response?: { status?: number; data?: { error?: unknown; attemptsLeft?: number } } })?.response;
+      if (data?.status === 423 && typeof data.data?.error === 'string') {
+        setError(data.data.error); // account locked: the server says for how long
+      } else if (data?.status === 401) {
+        const left = data.data?.attemptsLeft;
+        setError(left !== undefined && left <= 3
+          ? `Invalid email or password. ${left} attempt${left === 1 ? '' : 's'} left before this account is locked.`
+          : 'Invalid email or password. Please try again.');
+      } else {
+        setError('Could not sign in. Please check your connection and try again.');
+      }
     }
   }
 

@@ -29,7 +29,7 @@ const messages = (type?: string) => prisma.staffMessage.findMany({ where: type ?
 
 before(async () => {
   const DAY = 86400000;
-  const prov = await prisma.user.findFirstOrThrow({ where: { role: 'provider' } });
+  const prov = await prisma.user.findFirstOrThrow({ where: { isProvider: true } });
   const patient = (mrn: string) => prisma.patient.findUniqueOrThrow({ where: { mrn } });
   const add = (patientId: string, offsetMs: number, status: string) =>
     prisma.appointment.create({ data: { patientId, providerId: prov.id, date: new Date(Date.now() + offsetMs), duration: 30, type: 'follow-up', status } });
@@ -112,7 +112,7 @@ test('refill: no follow-up -> asks GLP-1; yes -> offers visit; books follow-up',
 
 test('GLP-1 patient with a far-off appointment can move it sooner (old one cancelled)', async () => {
   const lisa = await prisma.patient.findUniqueOrThrow({ where: { mrn: 'MRN-005' } });
-  const prov = await prisma.user.findFirstOrThrow({ where: { role: 'provider' } });
+  const prov = await prisma.user.findFirstOrThrow({ where: { isProvider: true } });
   await prisma.appointment.deleteMany({ where: { patientId: lisa.id } });
   const far = await prisma.appointment.create({ data: { patientId: lisa.id, providerId: prov.id, date: new Date(Date.now() + 40 * 86400000), duration: 30, type: 'follow-up', status: 'scheduled' } });
   await verify('x7', LISA);
@@ -193,6 +193,9 @@ test('check-in with an appointment today notifies staff', async () => {
 });
 
 test('check-in with no appointment today says so', async () => {
+  // Earlier tests may have booked Lisa a slot that falls later today, so start from a clean slate.
+  const lisa = await prisma.patient.findUniqueOrThrow({ where: { mrn: 'MRN-005' } });
+  await prisma.appointment.deleteMany({ where: { patientId: lisa.id } });
   await verify('x14b', LISA);
   const r = await call('check_in', { callId: 'x14b' });
   assert.equal(r.checkedIn, false);

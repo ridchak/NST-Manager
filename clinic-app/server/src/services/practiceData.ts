@@ -93,7 +93,7 @@ export class LocalPracticeData implements PracticeData {
   }
 
   async findSlots(_p: PatientRef, type: VisitType, from: Date, maxSlots = 6) {
-    const providers = await prisma.user.findMany({ where: { role: 'provider' }, orderBy: { name: 'asc' } });
+    const providers = await prisma.user.findMany({ where: { isProvider: true, active: true }, orderBy: { name: 'asc' } });
     if (!providers.length) return [];
     const windowEnd = new Date(from.getTime() + 14 * 86400000);
     const busy = await prisma.appointment.findMany({

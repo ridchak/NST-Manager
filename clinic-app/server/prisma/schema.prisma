@@ -12,7 +12,11 @@ model User {
   email        String        @unique
   password     String
   name         String
-  role         String        @default("provider") // admin | provider | staff
+  role         String        @default("user") // access level: user | admin | superuser
+  isProvider   Boolean       @default(false) // prescriber/clinician: bookable, transfer target
+  active       Boolean       @default(true)
+  failedLogins Int           @default(0)
+  lockedUntil  DateTime?
   extension    String?       // phone extension, used when the assistant transfers a call
   cellPhone    String?       // fallback transfer number
   createdAt    DateTime      @default(now())

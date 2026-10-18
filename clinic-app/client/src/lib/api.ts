@@ -11,7 +11,8 @@ api.interceptors.request.use(config => {
 api.interceptors.response.use(
   res => res,
   err => {
-    if (err.response?.status === 401) {
+    // A wrong password on the sign-in form is also a 401; let that page show its own message.
+    if (err.response?.status === 401 && !String(err.config?.url ?? '').includes('/auth/login')) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
@@ -78,6 +79,21 @@ export const phoneApi = {
   sendMessage: (toNumber: string, text: string) => api.post('/phone/message', { toNumber, text }).then(r => r.data),
   getVoicemails: () => api.get('/phone/voicemails').then(r => r.data),
 };
+
+export const usersApi = {
+  list: () => api.get('/users').then(r => r.data),
+  create: (data: { email: string; name: string; password: string; role: string; isProvider: boolean }) => api.post('/users', data).then(r => r.data),
+  update: (id: string, data: Record<string, unknown>) => api.patch(`/users/${id}`, data).then(r => r.data),
+  unlock: (id: string) => api.post(`/users/${id}/unlock`).then(r => r.data),
+  resetPassword: (id: string, newPassword: string) => api.post(`/users/${id}/reset-password`, { newPassword }).then(r => r.data),
+  remove: (id: string) => api.delete(`/users/${id}`).then(r => r.data),
+};
+
+/** Best human-readable message from a failed request. */
+export function errorMessage(err: unknown, fallback = 'Something went wrong. Please try again.'): string {
+  const data = (err as { response?: { data?: { error?: unknown } } })?.response?.data;
+  return typeof data?.error === 'string' ? data.error : fallback;
+}
 
 export const messagesApi = {
   list: (params?: { status?: string; type?: string }) => api.get('/messages', { params }).then(r => r.data),

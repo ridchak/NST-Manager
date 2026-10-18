@@ -2,7 +2,8 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'provider' | 'staff';
+  role: 'user' | 'admin' | 'superuser';
+  isProvider?: boolean;
   createdAt: string;
 }
 

@@ -1,0 +1,138 @@
+import { Router, Request, Response } from 'express';
+import bcrypt from 'bcryptjs';
+import { z } from 'zod';
+import prisma from '../lib/prisma';
+import { passwordSchema } from '../lib/password';
+import { requireRole } from '../middleware/auth';
+import { ROLES } from '../services/access';
+
+/** Account management. Superuser only (enforced here and by the global permission policy). */
+const router = Router();
+router.use(requireRole('superuser'));
+
+const select = {
+  id: true, email: true, name: true, role: true, isProvider: true, active: true,
+  extension: true, cellPhone: true, failedLogins: true, lockedUntil: true, createdAt: true,
+} as const;
+
+const present = (u: any) => ({
+  ...u,
+  locked: !!u.lockedUntil && u.lockedUntil.getTime() > Date.now(),
+});
+
+const roleSchema = z.enum(ROLES as [string, ...string[]]);
+
+async function otherActiveSuperusers(excludingId: string): Promise<number> {
+  return prisma.user.count({ where: { role: 'superuser', active: true, NOT: { id: excludingId } } });
+}
+
+router.get('/', async (_req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({ select, orderBy: [{ active: 'desc' }, { name: 'asc' }] });
+    res.json({ data: users.map(present), total: users.length });
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+router.post('/', async (req: Request, res: Response) => {
+  try {
+    const body = z.object({
+      email: z.string().email().transform(e => e.trim().toLowerCase()),
+      name: z.string().min(1),
+      password: passwordSchema,
+      role: roleSchema.default('user'),
+      isProvider: z.boolean().default(false),
+      extension: z.string().optional(),
+      cellPhone: z.string().optional(),
+    }).parse(req.body);
+    const user = await prisma.user.create({
+      data: { ...body, password: await bcrypt.hash(body.password, 10) },
+      select,
+    });
+    res.status(201).json(present(user));
+  } catch (err: any) {
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.errors });
+    if (err.code === 'P2002') return res.status(409).json({ error: 'An account with that email already exists' });
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+router.patch('/:id', async (req: Request, res: Response) => {
+  try {
+    const body = z.object({
+      name: z.string().min(1).optional(),
+      role: roleSchema.optional(),
+      isProvider: z.boolean().optional(),
+      active: z.boolean().optional(),
+      extension: z.string().nullable().optional(),
+      cellPhone: z.string().nullable().optional(),
+    }).parse(req.body);
+
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ error: 'User not found' });
+
+    const isSelf = target.id === req.user!.userId;
+    const losesSuperuser = target.role === 'superuser' && ((body.role && body.role !== 'superuser') || body.active === false);
+    if (isSelf && (body.role !== undefined && body.role !== target.role)) {
+      return res.status(400).json({ error: 'You cannot change your own access level.' });
+    }
+    if (isSelf && body.active === false) return res.status(400).json({ error: 'You cannot deactivate your own account.' });
+    if (losesSuperuser && (await otherActiveSuperusers(target.id)) === 0) {
+      return res.status(400).json({ error: 'There must always be at least one active superuser.' });
+    }
+
+    const user = await prisma.user.update({ where: { id: target.id }, data: body, select });
+    res.json(present(user));
+  } catch (err: any) {
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.errors });
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+router.post('/:id/unlock', async (req: Request, res: Response) => {
+  try {
+    const user = await prisma.user.update({ where: { id: req.params.id }, data: { failedLogins: 0, lockedUntil: null }, select });
+    console.warn(`SECURITY: ${req.user!.email} unlocked ${user.email}`);
+    res.json(present(user));
+  } catch (err: any) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'User not found' });
+    res.status(500).json({ error: 'Failed to unlock user' });
+  }
+});
+
+router.post('/:id/reset-password', async (req: Request, res: Response) => {
+  try {
+    const { newPassword } = z.object({ newPassword: passwordSchema }).parse(req.body);
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { password: await bcrypt.hash(newPassword, 10), failedLogins: 0, lockedUntil: null },
+      select,
+    });
+    console.warn(`SECURITY: ${req.user!.email} reset the password for ${user.email}`);
+    res.json(present(user));
+  } catch (err: any) {
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.errors });
+    if (err.code === 'P2025') return res.status(404).json({ error: 'User not found' });
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    if (target.id === req.user!.userId) return res.status(400).json({ error: 'You cannot delete your own account.' });
+    if (target.role === 'superuser' && (await otherActiveSuperusers(target.id)) === 0) {
+      return res.status(400).json({ error: 'There must always be at least one active superuser.' });
+    }
+    await prisma.user.delete({ where: { id: target.id } });
+    res.json({ message: 'User deleted' });
+  } catch (err: any) {
+    // Appointments keep a reference to their provider, so those accounts can only be deactivated.
+    if (err.code === 'P2003') return res.status(409).json({ error: 'This user has appointment history. Deactivate the account instead of deleting it.' });
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+export default router;

@@ -324,7 +324,7 @@ async function resolvePrescriber(providerId?: string): Promise<{ name: string; e
       if (m) return { name: m.name ?? 'your prescriber', extension: m.extension, cellPhone: m.cell };
     } catch { /* ignore malformed config */ }
   }
-  const fallback = await prisma.user.findFirst({ where: { role: 'provider', OR: [{ extension: { not: null } }, { cellPhone: { not: null } }] } });
+  const fallback = await prisma.user.findFirst({ where: { isProvider: true, active: true, OR: [{ extension: { not: null } }, { cellPhone: { not: null } }] } });
   return fallback ? { name: fallback.name, extension: fallback.extension, cellPhone: fallback.cellPhone } : null;
 }
 

@@ -4,6 +4,9 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Refusing to seed demo accounts and sample patients in production. Use "npm run create-superuser" instead.');
+  }
   console.log('Seeding database...');
 
   // Create staff users
@@ -17,7 +20,7 @@ async function main() {
       email: 'admin@nstclinic.com',
       password: adminPassword,
       name: 'Admin User',
-      role: 'admin',
+      role: 'superuser',
     },
   });
 
@@ -28,7 +31,8 @@ async function main() {
       email: 'dr.smith@nstclinic.com',
       password: providerPassword,
       name: 'Dr. Sarah Smith',
-      role: 'provider',
+      role: 'admin',
+      isProvider: true,
     },
   });
 
@@ -39,8 +43,15 @@ async function main() {
       email: 'dr.jones@nstclinic.com',
       password: await bcrypt.hash('provider123', 10),
       name: 'Dr. Michael Jones',
-      role: 'provider',
+      role: 'admin',
+      isProvider: true,
     },
+  });
+
+  await prisma.user.upsert({
+    where: { email: 'frontdesk@nstclinic.com' },
+    update: {},
+    create: { email: 'frontdesk@nstclinic.com', password: await bcrypt.hash('frontdesk123', 10), name: 'Front Desk', role: 'user' },
   });
 
   console.log('Created users:', { admin: admin.email, provider: provider.email });
@@ -464,9 +475,10 @@ async function main() {
 
   console.log('Database seeded successfully!');
   console.log('\nLogin credentials:');
-  console.log('  Admin:    admin@nstclinic.com / admin123');
-  console.log('  Provider: dr.smith@nstclinic.com / provider123');
-  console.log('  Provider: dr.jones@nstclinic.com / provider123');
+  console.log('  Superuser: admin@nstclinic.com / admin123');
+  console.log('  Admin:     dr.smith@nstclinic.com / provider123');
+  console.log('  Admin:     dr.jones@nstclinic.com / provider123');
+  console.log('  User:     frontdesk@nstclinic.com / frontdesk123');
 }
 
 main()

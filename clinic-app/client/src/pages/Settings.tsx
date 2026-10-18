@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle, XCircle, RefreshCw, Database, Phone, Users } from 'lucide-react';
+import { CheckCircle, XCircle, RefreshCw, Database, Phone } from 'lucide-react';
 import { phoneApi } from '../lib/api';
 import Card, { CardHeader, CardBody } from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
+import UsersPanel from '../components/UsersPanel';
 
 const TABS = ['Integrations', 'Users'] as const;
 
@@ -29,10 +30,6 @@ export default function Settings() {
     },
   ];
 
-  const mockUsers = [
-    { id: '1', name: 'Dr. Sarah Johnson', email: 'admin@clinic.com', role: 'admin' },
-    { id: '2', name: 'Dr. Michael Chen', email: 'provider@clinic.com', role: 'provider' },
-  ];
 
   return (
     <div className="space-y-4">
@@ -102,52 +99,7 @@ cp clinic-app/server/.env.example clinic-app/server/.env
         </div>
       )}
 
-      {tab === 'Users' && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                <Users className="w-4 h-4 text-blue-600" />
-                Staff Accounts
-              </h3>
-            </div>
-          </CardHeader>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  {['Name', 'Email', 'Role', 'Actions'].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {mockUsers.map(u => (
-                  <tr key={u.id} className="border-b border-gray-50">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-xs font-semibold">
-                          {u.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                        </div>
-                        <span className="font-medium text-gray-900">{u.name}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{u.email}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={u.role === 'admin' ? 'danger' : u.role === 'provider' ? 'info' : 'neutral'}>
-                        {u.role}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button className="text-blue-600 hover:underline text-xs font-medium">Edit</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
+      {tab === 'Users' && <UsersPanel />}
     </div>
   );
 }
