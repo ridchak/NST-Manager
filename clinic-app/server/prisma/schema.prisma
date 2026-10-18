@@ -13,6 +13,8 @@ model User {
   password     String
   name         String
   role         String        @default("provider") // admin | provider | staff
+  extension    String?       // phone extension, used when the assistant transfers a call
+  cellPhone    String?       // fallback transfer number
   createdAt    DateTime      @default(now())
   appointments Appointment[]
 }
@@ -34,8 +36,13 @@ model Patient {
   emergencyContactPhone String?
   notes                 String?
   ecwId                 String?
+  nexhealthId           String?
+  balance               Float?          // last recorded balance (NexHealth does not post payments back to eCW)
+  balanceUpdatedAt      DateTime?
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
+  staffMessages         StaffMessage[]
+  callLogs              CallLog[]
   appointments          Appointment[]
   progressEntries       ProgressEntry[]
   intakeForms           IntakeForm[]
@@ -97,6 +104,7 @@ model InsuranceInfo {
   groupNumber    String?
   subscriberName String?
   isPrimary      Boolean         @default(true)
+  copay          Float?
   createdAt      DateTime        @default(now())
   patient        Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
   auths          InsuranceAuth[]
@@ -132,4 +140,31 @@ model Document {
   createdAt DateTime       @default(now())
   patient   Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
   auth      InsuranceAuth? @relation(fields: [authId], references: [id])
+}
+
+model StaffMessage {
+  id         String    @id @default(cuid())
+  patientId  String?
+  type       String    // refill | side-effect | prior-auth | check-in | med-question | callback | general
+  priority   String    @default("normal") // normal | urgent
+  subject    String
+  body       String
+  status     String    @default("open") // open | done
+  source     String    @default("assistant")
+  callId     String?
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+  patient    Patient?  @relation(fields: [patientId], references: [id], onDelete: SetNull)
+}
+
+model CallLog {
+  id          String   @id @default(cuid())
+  callId      String   @unique
+  callerPhone String?
+  patientId   String?
+  verified    Boolean  @default(false)
+  events      String   @default("[]") // JSON array of { at, tool, outcome }
+  startedAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  patient     Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
 }

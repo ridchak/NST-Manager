@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Calendar, TrendingDown,
-  FileText, Shield, Phone, Settings, Activity, X,
+  FileText, Shield, Phone, Settings, Activity, X, Inbox,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -12,6 +12,7 @@ const nav = [
   { to: '/progress', label: 'Progress', icon: TrendingDown },
   { to: '/forms', label: 'Intake Forms', icon: FileText },
   { to: '/insurance', label: 'Insurance Auth', icon: Shield },
+  { to: '/messages', label: 'Messages', icon: Inbox },
   { to: '/phone', label: 'Phone System', icon: Phone },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
@@ -55,7 +56,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           ))}
         </nav>
         <div className="px-6 py-4 border-t border-gray-700">
-          <div className="text-xs text-gray-500">v1.0.0 &middot; HIPAA Compliant</div>
+          <div className="text-xs text-gray-500">v1.0.0</div>
         </div>
       </aside>
     </>

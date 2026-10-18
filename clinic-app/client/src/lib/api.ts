@@ -79,4 +79,10 @@ export const phoneApi = {
   getVoicemails: () => api.get('/phone/voicemails').then(r => r.data),
 };
 
+export const messagesApi = {
+  list: (params?: { status?: string; type?: string }) => api.get('/messages', { params }).then(r => r.data),
+  calls: () => api.get('/messages/calls').then(r => r.data),
+  setStatus: (id: string, status: 'open' | 'done') => api.patch(`/messages/${id}`, { status }).then(r => r.data),
+};
+
 export default api;

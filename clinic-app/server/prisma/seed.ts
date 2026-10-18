@@ -452,6 +452,16 @@ async function main() {
     });
   }
 
+  // Sample data for the phone assistant (balances/copays are what the practice has on record)
+  await prisma.user.update({ where: { email: 'dr.smith@nstclinic.com' }, data: { extension: '101', cellPhone: '+15550100101' } });
+  await prisma.user.update({ where: { email: 'dr.jones@nstclinic.com' }, data: { extension: '102', cellPhone: '+15550100102' } });
+  const balances = [125.5, 0, 30, 210, 45];
+  const copays = [25, 30, 25, 40, 30];
+  for (let i = 0; i < createdPatients.length; i++) {
+    await prisma.patient.update({ where: { id: createdPatients[i].id }, data: { balance: balances[i], balanceUpdatedAt: new Date() } });
+    await prisma.insuranceInfo.updateMany({ where: { patientId: createdPatients[i].id }, data: { copay: copays[i] } });
+  }
+
   console.log('Database seeded successfully!');
   console.log('\nLogin credentials:');
   console.log('  Admin:    admin@nstclinic.com / admin123');

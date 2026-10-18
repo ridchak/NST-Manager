@@ -21,7 +21,7 @@ import {
 import Card, { CardHeader, CardBody } from '../components/ui/Card';
 import { StatusBadge } from '../components/ui/Badge';
 import Modal from '../components/ui/Modal';
-import type { ProgressEntry } from '../types';
+import type { Appointment, InsuranceInfo, ProgressEntry } from '../types';
 
 const tabs = [
   { id: 'overview', label: 'Overview', icon: User },
@@ -144,7 +144,7 @@ export default function PatientDetail() {
   const latestProgress = progressData?.data?.[0] ?? patient?.progressEntries?.[0];
   const bmiValue = latestProgress?.bmi ?? 0;
   const bmiInfo = getBMICategory(bmiValue);
-  const chartPoints = (chartData ?? []).map(e => ({
+  const chartPoints = (chartData ?? []).map((e: any) => ({
     date: format(parseISO(e.date), 'MMM d'),
     weight: e.weight,
     bmi: e.bmi,
@@ -331,7 +331,7 @@ export default function PatientDetail() {
                 ) : (appointmentsData?.data ?? []).length === 0 ? (
                   <tr><td colSpan={5} className="py-8 text-center text-sm text-gray-400">No appointments found</td></tr>
                 ) : (
-                  (appointmentsData?.data ?? []).map(a => (
+                  (appointmentsData?.data ?? []).map((a: Appointment) => (
                     <tr key={a.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm text-gray-700">{formatDate(a.startTime)} {format(parseISO(a.startTime), 'h:mm a')}</td>
                       <td className="px-4 py-3"><StatusBadge status={a.type} /></td>
@@ -364,7 +364,7 @@ export default function PatientDetail() {
                 ) : (formsData?.data ?? []).length === 0 ? (
                   <tr><td colSpan={5} className="py-8 text-center text-sm text-gray-400">No forms found</td></tr>
                 ) : (
-                  (formsData?.data ?? []).map(f => (
+                  (formsData?.data ?? []).map((f: any) => (
                     <tr key={f.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm font-medium text-gray-900 capitalize">{f.type.replace('-', ' ')}</td>
                       <td className="px-4 py-3"><StatusBadge status={f.status} /></td>
@@ -385,7 +385,7 @@ export default function PatientDetail() {
           {(patient.insuranceInfos ?? []).length === 0 ? (
             <Card><p className="text-sm text-gray-400 text-center py-6">No insurance information found</p></Card>
           ) : (
-            (patient.insuranceInfos ?? []).map(ins => (
+            (patient.insuranceInfos ?? []).map((ins: InsuranceInfo) => (
               <Card key={ins.id}>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-gray-900">{ins.insuranceName}</h3>

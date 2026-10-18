@@ -9,7 +9,7 @@ import { Search } from 'lucide-react';
 import { progressApi, patientsApi } from '../lib/api';
 import { formatDate, formatWeight, formatBP, getBMICategory, cn } from '../lib/utils';
 import Card, { CardHeader, CardBody } from '../components/ui/Card';
-import type { ProgressEntry } from '../types';
+import type { Patient, ProgressEntry } from '../types';
 
 const BMI_RANGES = [
   { label: 'Underweight (<18.5)', min: 0, max: 18.5 },
@@ -42,7 +42,7 @@ export default function Progress() {
     queryFn: () => patientsApi.list({ limit: 200 }),
   });
 
-  const entries = progressData?.data ?? [];
+  const entries: ProgressEntry[] = progressData?.data ?? [];
 
   // BMI Distribution
   const bmiDistribution = BMI_RANGES.map(range => ({
@@ -80,7 +80,7 @@ export default function Progress() {
               className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white min-w-[200px]"
             >
               <option value="">All Patients</option>
-              {(patientsData?.data ?? []).map(p => (
+              {(patientsData?.data ?? []).map((p: Patient) => (
                 <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>
               ))}
             </select>

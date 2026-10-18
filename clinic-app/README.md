@@ -56,8 +56,8 @@ cd ../client && npm run dev   # client on :5173
 
 | Role | Email | Password |
 |------|-------|----------|
-| Admin | admin@clinic.com | admin123 |
-| Provider | provider@clinic.com | provider123 |
+| Admin | admin@nstclinic.com | admin123 |
+| Provider | dr.smith@nstclinic.com | provider123 |
 
 ## Integrations
 
@@ -97,3 +97,16 @@ clinic-app/
     │   └── services/ # RingCentral, eCW integrations
     └── prisma/      # Database schema & seed
 ```
+
+## Phone assistant
+
+See [docs/PHONE_ASSISTANT.md](docs/PHONE_ASSISTANT.md).
+
+## Production (single server)
+
+```bash
+cd client && npm ci && npm run build      # builds the web app
+cd ../server && npm ci && npx prisma migrate deploy && npm run build
+JWT_SECRET=... DATABASE_URL=... ASSISTANT_API_KEY=... npm start
+```
+The server serves the web app and the API on one port. `GET /api/health` is the health check.

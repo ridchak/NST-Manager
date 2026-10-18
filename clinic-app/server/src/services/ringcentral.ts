@@ -24,6 +24,7 @@ interface RCMessage {
 export class RingCentralService {
   private baseURL: string;
   private token: string | null = null;
+  private tokenExpiresAt = 0;
 
   constructor() {
     this.baseURL = process.env.RC_SERVER_URL || 'https://platform.ringcentral.com';
@@ -34,7 +35,7 @@ export class RingCentralService {
   }
 
   private async getToken(): Promise<string> {
-    if (this.token) return this.token;
+    if (this.token && Date.now() < this.tokenExpiresAt) return this.token;
     const params = new URLSearchParams({
       grant_type: 'password',
       username: process.env.RC_USERNAME!,
@@ -45,6 +46,8 @@ export class RingCentralService {
     });
     const res = await axios.post(`${this.baseURL}/restapi/oauth/token`, params);
     this.token = res.data.access_token;
+    // Refresh a minute early; expires_in is in seconds.
+    this.tokenExpiresAt = Date.now() + Math.max(60, (res.data.expires_in ?? 3600) - 60) * 1000;
     return this.token!;
   }
 
@@ -92,7 +95,7 @@ export class RingCentralService {
     const token = await this.getToken();
     const res = await axios.post(
       `${this.baseURL}/restapi/v1.0/account/~/extension/~/sms`,
-      { from: { phoneNumber: process.env.RC_EXTENSION }, to: [{ phoneNumber: toNumber }], text },
+      { from: { phoneNumber: process.env.RC_SMS_FROM || process.env.RC_EXTENSION }, to: [{ phoneNumber: toNumber }], text },
       { headers: { Authorization: `Bearer ${token}` } }
     );
     return res.data;

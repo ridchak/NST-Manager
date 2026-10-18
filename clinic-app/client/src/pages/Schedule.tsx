@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Calendar as BigCalendar, momentLocalizer, Views } from 'react-big-calendar';
+import { Calendar as BigCalendar, momentLocalizer, Views, type View } from 'react-big-calendar';
 import moment from 'moment';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,7 +12,7 @@ import { getAppointmentTypeColor, cn } from '../lib/utils';
 import Card from '../components/ui/Card';
 import Modal from '../components/ui/Modal';
 import { StatusBadge } from '../components/ui/Badge';
-import type { Appointment } from '../types';
+import type { Appointment, Patient } from '../types';
 
 const localizer = momentLocalizer(moment);
 
@@ -79,7 +79,7 @@ export default function Schedule() {
     },
   });
 
-  const events: CalendarEvent[] = (apptData?.data ?? []).map(a => ({
+  const events: CalendarEvent[] = ((apptData?.data ?? []) as Appointment[]).map(a => ({
     id: a.id,
     title: `${a.patient?.firstName ?? ''} ${a.patient?.lastName ?? ''} — ${a.type}`,
     start: new Date(a.startTime),
@@ -129,7 +129,7 @@ export default function Schedule() {
             <BigCalendar
               localizer={localizer}
               events={events}
-              view={view as Parameters<typeof BigCalendar>[0]['view']}
+              view={view as View}
               onView={v => setView(v)}
               date={date}
               onNavigate={d => setDate(d)}
@@ -162,7 +162,8 @@ export default function Schedule() {
                 errors.patientId ? 'border-red-300' : 'border-gray-300')}
             >
               <option value="">Select a patient...</option>
-              {(patientsData?.data ?? []).map(p => (
+              {(patientsData?.data ?? []).map((p: Patient) => (
+
                 <option key={p.id} value={p.id}>{p.firstName} {p.lastName} — {p.mrn}</option>
               ))}
             </select>

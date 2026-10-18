@@ -177,7 +177,7 @@ export default function Patients() {
                       <td className="px-4 py-3 text-sm text-gray-600 font-mono">{p.mrn}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">{formatDate(p.dob)}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">{formatPhone(p.phone)}</td>
-                      <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
+                      <td className="px-4 py-3"><StatusBadge status={p.status ?? 'active'} /></td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         {lastProgress ? formatDate(lastProgress.date) : '—'}
                       </td>
