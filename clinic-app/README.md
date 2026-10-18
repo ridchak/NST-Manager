@@ -84,6 +84,14 @@ SUPERUSER_PASSWORD="a-long-passphrase" npm run create-superuser -- you@yourclini
 - Passwords must be at least 10 characters. Sessions last 12 hours.
 - Manage accounts at **Settings → Users** (superuser only). Accounts with appointment history are deactivated rather than deleted.
 
+## Practice details and staff numbers
+
+A superuser edits the practice's address, phone, fax, time zone and **office hours** at **Settings → Practice**, and each
+provider's extension and cell number at **Settings → Users → Phone numbers**. Nothing personal is kept in the code.
+
+> **Keep this repository private.** It was forked from a public project, so check it under GitHub → Settings → Danger Zone →
+> *Change visibility*. Never commit `.env` files, staff phone numbers, or exports from the audit log.
+
 ## Branding
 
 - **Logo:** the icon mark only (no wordmark), as vector files in `client/public/`: `logo.svg` (full color, for light

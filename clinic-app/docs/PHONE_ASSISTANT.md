@@ -47,13 +47,18 @@ All rules live in `protocol.ts` and are covered by tests (`npm test`).
 
 ## Setup
 
-1. **Server env** (`server/.env`, see `.env.example`): `ASSISTANT_API_KEY` (long random string),
-   `OFFICE_HOURS`, `OFFICE_TZ`, `FRONT_DESK_NUMBER`, `CLINIC_NAME`.
+1. **Practice details.** Address, phone, fax, time zone and office hours are managed in the app by a superuser at
+   **Settings → Practice** (they are pre-filled for Premier Weight Management and Lifestyle: Lombard, IL, Central time).
+   The assistant uses the hours to decide whether the office is open, so update them for holidays and schedule changes.
+   **Server env** (`server/.env`, see `.env.example`): `ASSISTANT_API_KEY` (long random string), `FRONT_DESK_NUMBER`.
+   `FRONT_DESK_NUMBER` must be a **direct line or extension for a person**, not the main number the assistant answers,
+   or a transfer would ring the assistant again.
 2. **NexHealth**: `NEXHEALTH_API_KEY`, `NEXHEALTH_SUBDOMAIN`, `NEXHEALTH_LOCATION_ID`,
    `NEXHEALTH_PROVIDER_IDS`, `NEXHEALTH_APPT_TYPE_NEW`, `NEXHEALTH_APPT_TYPE_FOLLOWUP`.
    Leave blank to run on the app's own database for testing.
-3. **Prescriber transfers**: set an extension and cell on each provider user, or use
-   `PRESCRIBER_TRANSFERS` (JSON keyed by NexHealth provider id).
+3. **Prescriber transfers.** At **Settings → Users**, mark each provider as a prescriber and use **Phone numbers** to enter
+   their office extension and cell phone. Medication questions go to the extension during office hours and the cell phone
+   after hours. Cell numbers are stored in the database, never in the code.
 4. **Voice platform**: create an assistant, paste the text from `GET /api/assistant/prompt`
    as its system prompt, register the tools from `GET /api/assistant/tools`, and point each
    tool at `POST https://<your-domain>/api/assistant/tools/<name>` with header

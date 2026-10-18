@@ -16,6 +16,7 @@ import assistantRouter from './routes/assistant';
 import messagesRouter from './routes/messages';
 import usersRouter from './routes/users';
 import auditRouter from './routes/audit';
+import practiceRouter from './routes/practice';
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use('/api/phone', phoneRouter);
 app.use('/api/messages', messagesRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/audit', auditRouter);
+app.use('/api/practice', practiceRouter);
 
 // In production the built web app is served by this same server (one service to host).
 const clientDist = path.join(__dirname, '../../client/dist');

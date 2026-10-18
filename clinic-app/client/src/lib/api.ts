@@ -114,6 +114,19 @@ export function errorMessage(err: unknown, fallback = 'Something went wrong. Ple
   return typeof data?.error === 'string' ? data.error : fallback;
 }
 
+export interface PracticeDetails {
+  name: string; street: string; suite: string | null; city: string; state: string; zip: string;
+  phone: string; fax: string | null; timezone: string; hours: string;
+  phoneDisplay: string; faxDisplay: string | null; addressLine: string;
+  hoursByDay: Record<string, [string, string] | null>; hoursText: string;
+  isDefault: boolean; overriddenByEnvironment: boolean;
+}
+
+export const practiceApi = {
+  get: (): Promise<PracticeDetails> => api.get('/practice').then(r => r.data),
+  save: (data: Record<string, unknown>): Promise<PracticeDetails> => api.put('/practice', data).then(r => r.data),
+};
+
 export const messagesApi = {
   list: (params?: { status?: string; type?: string }) => api.get('/messages', { params }).then(r => r.data),
   calls: () => api.get('/messages/calls').then(r => r.data),

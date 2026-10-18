@@ -5,11 +5,12 @@ import { phoneApi } from '../lib/api';
 import Card, { CardHeader, CardBody } from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import UsersPanel from '../components/UsersPanel';
+import PracticePanel from '../components/PracticePanel';
 
-const TABS = ['Integrations', 'Users'] as const;
+const TABS = ['Practice', 'Integrations', 'Users'] as const;
 
 export default function Settings() {
-  const [tab, setTab] = useState<'Integrations' | 'Users'>('Integrations');
+  const [tab, setTab] = useState<(typeof TABS)[number]>('Practice');
 
   const { data: rcConfig } = useQuery({ queryKey: ['phone', 'config'], queryFn: phoneApi.getConfig });
 
@@ -46,6 +47,8 @@ export default function Settings() {
           ))}
         </div>
       </div>
+
+      {tab === 'Practice' && <PracticePanel />}
 
       {tab === 'Integrations' && (
         <div className="space-y-4">

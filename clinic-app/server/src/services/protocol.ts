@@ -6,6 +6,8 @@
  * were not specified in the original protocol and should be confirmed.
  */
 
+import { getPractice } from './practice';
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ---------- Office hours ----------
@@ -35,8 +37,57 @@ export function parseOfficeHours(spec: string, timezone: string): OfficeHours {
   return { timezone, days };
 }
 
+/**
+ * The practice's current hours. Comes from the saved practice settings; OFFICE_HOURS / OFFICE_TZ in the
+ * environment, when set, override them (an emergency switch, and how the tests pin the hours).
+ */
 export function loadOfficeHours(): OfficeHours {
-  return parseOfficeHours(process.env.OFFICE_HOURS || 'Mon-Fri 09:00-17:00', process.env.OFFICE_TZ || 'America/New_York');
+  const p = getPractice();
+  return parseOfficeHours(process.env.OFFICE_HOURS || p.hours, process.env.OFFICE_TZ || p.timezone);
+}
+
+const ZONE_NAMES: Record<string, string> = {
+  'America/New_York': 'Eastern', 'America/Chicago': 'Central', 'America/Denver': 'Mountain', 'America/Phoenix': 'Arizona',
+  'America/Los_Angeles': 'Pacific', 'America/Anchorage': 'Alaska', 'Pacific/Honolulu': 'Hawaii',
+};
+
+/** "Central time" for a known US zone, otherwise the zone id. */
+export function zoneLabel(tz: string): string {
+  return ZONE_NAMES[tz] ? `${ZONE_NAMES[tz]} time` : tz;
+}
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** "08:00" -> "8 AM", "15:30" -> "3:30 PM" */
+export function clockLabel(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return `${hour}${m ? ':' + String(m).padStart(2, '0') : ''} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+/** Serialises per-day hours back into the "Mon 08:00-17:00; ..." form. Closed days are omitted. */
+export function hoursToSpec(days: OfficeHours['days']): string {
+  return [1, 2, 3, 4, 5, 6, 0]
+    .filter(d => days[d])
+    .map(d => `${DAY_ABBR[d]} ${days[d]![0]}-${days[d]![1]}`)
+    .join('; ');
+}
+
+/** Plain-English hours, grouping days that share the same times: "Monday and Thursday 8 AM to 5 PM; ... closed Wednesday and Sunday". */
+export function describeHours(hours: OfficeHours): string {
+  const order = [1, 2, 3, 4, 5, 6, 0];
+  const groups = new Map<string, number[]>();
+  for (const d of order) {
+    const w = hours.days[d];
+    if (!w) continue;
+    const key = `${clockLabel(w[0])} to ${clockLabel(w[1])}`;
+    groups.set(key, [...(groups.get(key) ?? []), d]);
+  }
+  const join = (names: string[]) => (names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`);
+  const open = [...groups.entries()].map(([times, ds]) => `${join(ds.map(d => DAY_NAMES[d]))} ${times}`);
+  const closed = order.filter(d => !hours.days[d]).map(d => DAY_NAMES[d]);
+  return `${open.join('; ')}${closed.length ? `; closed ${join(closed)}` : ''}`;
 }
 
 /** Wall-clock parts of `date` in the office timezone. */

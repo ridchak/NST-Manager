@@ -43,6 +43,9 @@ export function requiredRole(method: string, apiPath: string): Role {
 
   if (['/users', '/audit'].some(p => path === p || path.startsWith(p + '/'))) return 'superuser';
 
+  // Anyone signed in can read the practice's details; only a superuser can change them.
+  if (path === '/practice' && m !== 'GET' && m !== 'HEAD' && m !== 'OPTIONS') return 'superuser';
+
   const exception = EXCEPTIONS.find(e => e.method === m && e.pattern.test(path));
   if (exception) return exception.needs;
 

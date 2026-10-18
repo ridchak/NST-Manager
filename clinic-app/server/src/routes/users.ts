@@ -5,6 +5,7 @@ import prisma from '../lib/prisma';
 import { passwordSchema } from '../lib/password';
 import { requireRole } from '../middleware/auth';
 import { ROLES } from '../services/access';
+import { digits10, toE164 } from '../lib/phone';
 
 /** Account management. Superuser only (enforced here and by the global permission policy). */
 const router = Router();
@@ -18,6 +19,23 @@ const select = {
 const present = (u: any) => ({
   ...u,
   locked: !!u.lockedUntil && u.lockedUntil.getTime() > Date.now(),
+});
+
+/** Internal extension: 2-6 digits. Blank clears it. */
+const extensionSchema = z.string().trim().nullable().optional().transform((v, ctx) => {
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  if (!/^\d{2,6}$/.test(v)) { ctx.addIssue({ code: 'custom', message: 'Extension must be 2 to 6 digits' }); return z.NEVER; }
+  return v;
+});
+
+/** Cell number: stored as +1XXXXXXXXXX so telephony platforms can dial it. Blank clears it. */
+const cellSchema = z.string().trim().nullable().optional().transform((v, ctx) => {
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  const e164 = toE164(v);
+  if (!e164 || !digits10(v)) { ctx.addIssue({ code: 'custom', message: 'Enter a valid 10-digit US cell number' }); return z.NEVER; }
+  return e164;
 });
 
 const roleSchema = z.enum(ROLES as [string, ...string[]]);
@@ -43,8 +61,8 @@ router.post('/', async (req: Request, res: Response) => {
       password: passwordSchema,
       role: roleSchema.default('user'),
       isProvider: z.boolean().default(false),
-      extension: z.string().optional(),
-      cellPhone: z.string().optional(),
+      extension: extensionSchema,
+      cellPhone: cellSchema,
     }).parse(req.body);
     const user = await prisma.user.create({
       data: { ...body, password: await bcrypt.hash(body.password, 10) },
@@ -53,7 +71,7 @@ router.post('/', async (req: Request, res: Response) => {
     res.locals.auditDetail = `account: ${user.email}, level: ${user.role}`;
     res.status(201).json(present(user));
   } catch (err: any) {
-    if (err.name === 'ZodError') return res.status(400).json({ error: err.errors });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.errors.map((e: any) => e.message).join('; ') });
     if (err.code === 'P2002') return res.status(409).json({ error: 'An account with that email already exists' });
     res.status(500).json({ error: 'Failed to create user' });
   }
@@ -66,8 +84,8 @@ router.patch('/:id', async (req: Request, res: Response) => {
       role: roleSchema.optional(),
       isProvider: z.boolean().optional(),
       active: z.boolean().optional(),
-      extension: z.string().nullable().optional(),
-      cellPhone: z.string().nullable().optional(),
+      extension: extensionSchema,
+      cellPhone: cellSchema,
     }).parse(req.body);
 
     const target = await prisma.user.findUnique({ where: { id: req.params.id } });
@@ -90,7 +108,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
     const user = await prisma.user.update({ where: { id: target.id }, data: body, select });
     res.json(present(user));
   } catch (err: any) {
-    if (err.name === 'ZodError') return res.status(400).json({ error: err.errors });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.errors.map((e: any) => e.message).join('; ') });
     res.status(500).json({ error: 'Failed to update user' });
   }
 });
@@ -119,7 +137,7 @@ router.post('/:id/reset-password', async (req: Request, res: Response) => {
     res.locals.auditDetail = `account: ${user.email}`;
     res.json(present(user));
   } catch (err: any) {
-    if (err.name === 'ZodError') return res.status(400).json({ error: err.errors });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.errors.map((e: any) => e.message).join('; ') });
     if (err.code === 'P2025') return res.status(404).json({ error: 'User not found' });
     res.status(500).json({ error: 'Failed to reset password' });
   }

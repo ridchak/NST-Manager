@@ -202,3 +202,20 @@ model AuditLog {
   @@index([actorId, at])
   @@index([action, at])
 }
+
+/// The practice's own details. One row (id = 1), edited by a superuser in Settings. When no row exists the
+/// built-in defaults in services/practice.ts apply.
+model PracticeSettings {
+  id        Int      @id
+  name      String
+  street    String
+  suite     String?
+  city      String
+  state     String
+  zip       String
+  phone     String   // 10 digits
+  fax       String?  // 10 digits
+  timezone  String   // IANA, e.g. America/Chicago
+  hours     String   // "Mon 08:00-17:00; Tue 08:00-16:00; ..." (days not listed are closed)
+  updatedAt DateTime @updatedAt
+}

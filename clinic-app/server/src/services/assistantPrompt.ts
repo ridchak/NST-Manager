@@ -1,4 +1,6 @@
-import { loadOfficeHours } from './protocol';
+import { describeHours, loadOfficeHours, zoneLabel } from './protocol';
+import { getPractice } from './practice';
+import { formatPhone, spokenPhone } from '../lib/phone';
 import { clinicName } from '../lib/clinic';
 
 const callId = { type: 'string', description: 'The unique call identifier supplied by the telephony platform.' };
@@ -72,13 +74,17 @@ export const TOOL_DEFINITIONS = [
 
 export function buildSystemPrompt(): string {
   const hours = loadOfficeHours();
-  const open = Object.entries(hours.days)
-    .filter(([, v]) => v)
-    .map(([d, v]) => `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][Number(d)]} ${v![0]}-${v![1]}`)
-    .join(', ');
+  const p = getPractice();
   const clinic = clinicName();
+  const address = `${p.street}${p.suite ? `, ${p.suite}` : ''}, ${p.city}, ${p.state} ${p.zip}`;
 
-  return `You are the phone assistant for ${clinic}, a medical weight-loss practice. Office hours (${hours.timezone}): ${open}.
+  return `You are the phone assistant for ${clinic}, a medical weight-loss practice. 
+PRACTICE FACTS (answer these directly if asked; do not guess anything not listed here)
+- Address: ${address}.
+- Phone: ${formatPhone(p.phone)} (say it as: ${spokenPhone(p.phone)}).${p.fax ? `\n- Fax: ${formatPhone(p.fax)} (say it as: ${spokenPhone(p.fax)}).` : ''}
+- Office hours (${zoneLabel(hours.timezone)}): ${describeHours(hours)}.
+- When the office is closed, tell callers the next day it opens.
+
 Begin every call with: "Thank you for calling ${clinic}. This is the automated assistant. How can I help you today?" Then speak briefly and warmly, one question at a time, like a courteous front-desk staff member. You are an automated assistant; say so if asked.
 
 SAFETY FIRST
