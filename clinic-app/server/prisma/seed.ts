@@ -14,10 +14,10 @@ async function main() {
   const providerPassword = await bcrypt.hash('provider123', 10);
 
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@nstclinic.com' },
+    where: { email: 'admin@premier-demo.example' },
     update: {},
     create: {
-      email: 'admin@nstclinic.com',
+      email: 'admin@premier-demo.example',
       password: adminPassword,
       name: 'Admin User',
       role: 'superuser',
@@ -25,10 +25,10 @@ async function main() {
   });
 
   const provider = await prisma.user.upsert({
-    where: { email: 'dr.smith@nstclinic.com' },
+    where: { email: 'dr.smith@premier-demo.example' },
     update: {},
     create: {
-      email: 'dr.smith@nstclinic.com',
+      email: 'dr.smith@premier-demo.example',
       password: providerPassword,
       name: 'Dr. Sarah Smith',
       role: 'admin',
@@ -37,10 +37,10 @@ async function main() {
   });
 
   const provider2 = await prisma.user.upsert({
-    where: { email: 'dr.jones@nstclinic.com' },
+    where: { email: 'dr.jones@premier-demo.example' },
     update: {},
     create: {
-      email: 'dr.jones@nstclinic.com',
+      email: 'dr.jones@premier-demo.example',
       password: await bcrypt.hash('provider123', 10),
       name: 'Dr. Michael Jones',
       role: 'admin',
@@ -49,9 +49,9 @@ async function main() {
   });
 
   await prisma.user.upsert({
-    where: { email: 'frontdesk@nstclinic.com' },
+    where: { email: 'frontdesk@premier-demo.example' },
     update: {},
-    create: { email: 'frontdesk@nstclinic.com', password: await bcrypt.hash('frontdesk123', 10), name: 'Front Desk', role: 'user' },
+    create: { email: 'frontdesk@premier-demo.example', password: await bcrypt.hash('frontdesk123', 10), name: 'Front Desk', role: 'user' },
   });
 
   console.log('Created users:', { admin: admin.email, provider: provider.email });
@@ -271,7 +271,7 @@ async function main() {
   const appointmentsData = [
     {
       patientIdx: 0,
-      providerEmail: 'dr.smith@nstclinic.com',
+      providerEmail: 'dr.smith@premier-demo.example',
       date: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 9, 0),
       duration: 60,
       type: 'initial-consult',
@@ -280,7 +280,7 @@ async function main() {
     },
     {
       patientIdx: 1,
-      providerEmail: 'dr.smith@nstclinic.com',
+      providerEmail: 'dr.smith@premier-demo.example',
       date: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 10, 30),
       duration: 30,
       type: 'follow-up',
@@ -289,7 +289,7 @@ async function main() {
     },
     {
       patientIdx: 2,
-      providerEmail: 'dr.jones@nstclinic.com',
+      providerEmail: 'dr.jones@premier-demo.example',
       date: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 11, 0),
       duration: 30,
       type: 'weigh-in',
@@ -298,7 +298,7 @@ async function main() {
     },
     {
       patientIdx: 3,
-      providerEmail: 'dr.jones@nstclinic.com',
+      providerEmail: 'dr.jones@premier-demo.example',
       date: new Date(today.getFullYear(), today.getMonth(), today.getDate(), 14, 0),
       duration: 45,
       type: 'follow-up',
@@ -307,7 +307,7 @@ async function main() {
     },
     {
       patientIdx: 4,
-      providerEmail: 'dr.smith@nstclinic.com',
+      providerEmail: 'dr.smith@premier-demo.example',
       date: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 9, 30),
       duration: 60,
       type: 'initial-consult',
@@ -316,7 +316,7 @@ async function main() {
     },
     {
       patientIdx: 0,
-      providerEmail: 'dr.smith@nstclinic.com',
+      providerEmail: 'dr.smith@premier-demo.example',
       date: new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7, 9, 0),
       duration: 30,
       type: 'follow-up',
@@ -327,7 +327,7 @@ async function main() {
   ];
 
   for (const appt of appointmentsData) {
-    const providerUser = appt.providerEmail === 'dr.smith@nstclinic.com' ? provider : provider2;
+    const providerUser = appt.providerEmail === 'dr.smith@premier-demo.example' ? provider : provider2;
     await prisma.appointment.create({
       data: {
         patientId: createdPatients[appt.patientIdx].id,
@@ -464,8 +464,8 @@ async function main() {
   }
 
   // Sample data for the phone assistant (balances/copays are what the practice has on record)
-  await prisma.user.update({ where: { email: 'dr.smith@nstclinic.com' }, data: { extension: '101', cellPhone: '+15550100101' } });
-  await prisma.user.update({ where: { email: 'dr.jones@nstclinic.com' }, data: { extension: '102', cellPhone: '+15550100102' } });
+  await prisma.user.update({ where: { email: 'dr.smith@premier-demo.example' }, data: { extension: '101', cellPhone: '+15550100101' } });
+  await prisma.user.update({ where: { email: 'dr.jones@premier-demo.example' }, data: { extension: '102', cellPhone: '+15550100102' } });
   const balances = [125.5, 0, 30, 210, 45];
   const copays = [25, 30, 25, 40, 30];
   for (let i = 0; i < createdPatients.length; i++) {
@@ -475,10 +475,10 @@ async function main() {
 
   console.log('Database seeded successfully!');
   console.log('\nLogin credentials:');
-  console.log('  Superuser: admin@nstclinic.com / admin123');
-  console.log('  Admin:     dr.smith@nstclinic.com / provider123');
-  console.log('  Admin:     dr.jones@nstclinic.com / provider123');
-  console.log('  User:     frontdesk@nstclinic.com / frontdesk123');
+  console.log('  Superuser: admin@premier-demo.example / admin123');
+  console.log('  Admin:     dr.smith@premier-demo.example / provider123');
+  console.log('  Admin:     dr.jones@premier-demo.example / provider123');
+  console.log('  User:     frontdesk@premier-demo.example / frontdesk123');
 }
 
 main()

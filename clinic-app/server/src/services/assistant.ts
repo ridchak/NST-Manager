@@ -6,6 +6,7 @@ import {
 } from './protocol';
 import { sendStaffMessage } from './notify';
 import { RingCentralService } from './ringcentral';
+import { clinicName } from '../lib/clinic';
 
 /**
  * Tool handlers called by the voice-AI platform during a phone call.
@@ -296,7 +297,7 @@ const handlers: { [K in ToolName]: Handler<K> } = {
 
   async offer_text_messaging(a) {
     const s = requireVerified(a.callId);
-    const text = `${process.env.CLINIC_NAME || 'Our clinic'}: you can text us at this number for non-urgent questions, refills and scheduling. Please do not text emergencies; call 911.`;
+    const text = `${clinicName()}: you can text us at this number for non-urgent questions, refills and scheduling. Please do not text emergencies; call 911.`;
     let sent = false;
     try {
       const res = await new RingCentralService().sendMessage(s.phone, text);

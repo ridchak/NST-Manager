@@ -1,6 +1,8 @@
-# LifeStart Weight Loss Clinic Management System
+# Premier Weight Management and Lifestyle
 
-A full-stack web application for managing weight loss clinic operations.
+Practice management system
+
+A full-stack web application for running a weight-management practice.
 
 ## Features
 
@@ -56,9 +58,9 @@ cd ../client && npm run dev   # client on :5173
 
 | Access level | Email | Password |
 |-------|-------|----------|
-| Superuser | admin@nstclinic.com | admin123 |
-| Admin (prescriber) | dr.smith@nstclinic.com | provider123 |
-| User | frontdesk@nstclinic.com | frontdesk123 |
+| Superuser | admin@premier-demo.example | admin123 |
+| Admin (prescriber) | dr.smith@premier-demo.example | provider123 |
+| User | frontdesk@premier-demo.example | frontdesk123 |
 
 These exist only in the demo seed, which refuses to run when `NODE_ENV=production`.
 For a real deployment create your own superuser instead:

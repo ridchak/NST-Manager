@@ -1,7 +1,7 @@
 {
-  "name": "lifestart-clinic-app",
+  "name": "premier-weight-management-app",
   "version": "1.0.0",
-  "description": "LifeStart Weight Loss Clinic Management System",
+  "description": "Premier Weight Management and Lifestyle: practice management system",
   "scripts": {
     "install:all": "cd server && npm install && cd ../client && npm install",
     "setup": "cd server && npm install && cp -n .env.example .env || true && npx prisma generate && npx prisma migrate dev --name init && npm run db:seed",

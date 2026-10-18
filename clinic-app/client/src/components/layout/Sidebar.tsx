@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../hooks/useAuth';
+import { CLINIC_NAME } from '../../config';
 
 const nav: Array<{ to: string; label: string; icon: typeof Users; exact?: boolean; superuserOnly?: boolean }> = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -32,10 +33,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center shrink-0">
               <Activity className="w-5 h-5 text-white" />
             </div>
-            <div>
-              <div className="text-white font-semibold text-sm leading-tight">LifeStart Clinic</div>
-              <div className="text-gray-400 text-xs">Weight Loss Center</div>
-            </div>
+            <div className="text-white font-semibold text-sm leading-snug">{CLINIC_NAME}</div>
           </div>
           <button onClick={onClose} className="lg:hidden p-1 text-gray-400 hover:text-white rounded">
             <X className="w-5 h-5" />

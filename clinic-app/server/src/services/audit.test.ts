@@ -279,3 +279,11 @@ test('patient search works and ignores case (regression: it used to return a ser
   assert.equal((await api('GET', '/patients?search=MARTINEZ', s.token)).body.total, 1);
   assert.equal((await api('GET', '/patients?search=zzzzzz', s.token)).body.total, 0);
 });
+
+test('the consent form names the practice', async () => {
+  const s = await tokenFor('user');
+  const r = await api('GET', '/forms/templates/consent', s.token);
+  assert.equal(r.status, 200);
+  assert.ok(r.body.fields[0].label.includes('Premier Weight Management and Lifestyle'));
+  assert.ok(!JSON.stringify(r.body).includes('LifeStart'));
+});

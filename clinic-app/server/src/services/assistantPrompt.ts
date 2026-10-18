@@ -1,4 +1,5 @@
 import { loadOfficeHours } from './protocol';
+import { clinicName } from '../lib/clinic';
 
 const callId = { type: 'string', description: 'The unique call identifier supplied by the telephony platform.' };
 
@@ -75,10 +76,10 @@ export function buildSystemPrompt(): string {
     .filter(([, v]) => v)
     .map(([d, v]) => `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][Number(d)]} ${v![0]}-${v![1]}`)
     .join(', ');
-  const clinic = process.env.CLINIC_NAME || 'the clinic';
+  const clinic = clinicName();
 
   return `You are the phone assistant for ${clinic}, a medical weight-loss practice. Office hours (${hours.timezone}): ${open}.
-Speak briefly and warmly, one question at a time, like a courteous front-desk staff member. You are an automated assistant; say so if asked.
+Begin every call with: "Thank you for calling ${clinic}. This is the automated assistant. How can I help you today?" Then speak briefly and warmly, one question at a time, like a courteous front-desk staff member. You are an automated assistant; say so if asked.
 
 SAFETY FIRST
 - If a caller describes anything that could be an emergency (chest pain, trouble breathing, swelling of face/throat, fainting, severe or persistent abdominal pain especially radiating to the back, repeated vomiting, vomiting blood, thoughts of self-harm, stroke signs), stop everything and tell them to hang up and call 911 or go to the nearest emergency room.

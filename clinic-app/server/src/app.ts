@@ -27,7 +27,7 @@ app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', creden
 app.use(express.json());
 
 // Public: health check, sign-in, and the voice assistant (its own shared-key auth).
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'LifeStart Clinic API' }));
+app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'Premier Weight Management and Lifestyle API' }));
 app.use('/api/auth', authRouter);
 app.use('/api/assistant', assistantRouter);
 

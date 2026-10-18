@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CLINIC_NAME } from '../config';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -54,8 +55,8 @@ export default function Login() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg">
             <Activity className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">LifeStart</h1>
-          <p className="text-gray-500 mt-1">Weight Loss Clinic Management</p>
+          <h1 className="text-2xl font-bold text-gray-900 leading-snug">{CLINIC_NAME}</h1>
+          <p className="text-gray-500 mt-1">Staff sign-in</p>
         </div>
 
         {/* Card */}
@@ -78,7 +79,7 @@ export default function Login() {
               <input
                 type="email"
                 autoComplete="email"
-                placeholder="you@lifestart.com"
+                placeholder="you@yourpractice.com"
                 {...register('email')}
                 className={cn(
                   'w-full px-3.5 py-2.5 rounded-lg border text-sm transition-colors',
@@ -149,7 +150,7 @@ export default function Login() {
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-6">
-          © {new Date().getFullYear()} LifeStart Weight Loss Clinic. All rights reserved.
+          © {new Date().getFullYear()} {CLINIC_NAME}. All rights reserved.
         </p>
       </div>
     </div>

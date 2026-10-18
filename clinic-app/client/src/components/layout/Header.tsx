@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CLINIC_NAME } from '../../config';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Bell, LogOut, ChevronDown, User, Menu } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
@@ -27,7 +28,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
 
   const title = Object.entries(titles).find(([path]) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path)
-  )?.[1] ?? 'LifeStart Clinic';
+  )?.[1] ?? CLINIC_NAME;
 
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 lg:px-6 shrink-0">

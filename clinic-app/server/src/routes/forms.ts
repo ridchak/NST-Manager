@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
+import { clinicName } from '../lib/clinic';
 
 const router = Router();
 
@@ -35,7 +36,7 @@ const FORM_TEMPLATES: Record<string, { title: string; fields: any[] }> = {
   consent: {
     title: 'Treatment Consent',
     fields: [
-      { id: 'treatmentConsent', label: 'I consent to treatment at the Weight Loss Clinic', type: 'checkbox', required: true },
+      { id: 'treatmentConsent', label: `I consent to treatment at ${clinicName()}`, type: 'checkbox', required: true },
       { id: 'riskAcknowledgment', label: 'I acknowledge the risks and benefits of the proposed treatment plan', type: 'checkbox', required: true },
       { id: 'financialResponsibility', label: 'I accept financial responsibility for services rendered', type: 'checkbox', required: true },
       { id: 'signature', label: 'Electronic Signature (Full Name)', type: 'text', required: true },
