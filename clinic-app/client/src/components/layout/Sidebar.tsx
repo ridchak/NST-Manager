@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Calendar, TrendingDown,
-  FileText, Shield, Phone, Settings, Activity, X, Inbox,
+  FileText, Shield, Phone, Settings, Activity, X, Inbox, ScrollText,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useAuth } from '../../hooks/useAuth';
 
-const nav = [
+const nav: Array<{ to: string; label: string; icon: typeof Users; exact?: boolean; superuserOnly?: boolean }> = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { to: '/patients', label: 'Patients', icon: Users },
   { to: '/schedule', label: 'Schedule', icon: Calendar },
@@ -14,12 +15,14 @@ const nav = [
   { to: '/insurance', label: 'Insurance Auth', icon: Shield },
   { to: '/messages', label: 'Messages', icon: Inbox },
   { to: '/phone', label: 'Phone System', icon: Phone },
+  { to: '/audit', label: 'Audit Log', icon: ScrollText, superuserOnly: true },
   { to: '/settings', label: 'Settings', icon: Settings },
 ];
 
 interface SidebarProps { open: boolean; onClose: () => void; }
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
+  const { user } = useAuth();
   return (
     <>
       {open && <div className="fixed inset-0 z-20 bg-black/40 lg:hidden" onClick={onClose} />}
@@ -39,7 +42,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           </button>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {nav.map(({ to, label, icon: Icon, exact }) => (
+          {nav.filter(i => !i.superuserOnly || user?.role === 'superuser').map(({ to, label, icon: Icon, exact }) => (
             <NavLink
               key={to}
               to={to}

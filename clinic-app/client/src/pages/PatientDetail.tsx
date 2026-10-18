@@ -13,6 +13,7 @@ import {
   Tooltip, ResponsiveContainer
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
+import { useAuth } from '../hooks/useAuth';
 import { patientsApi, progressApi, appointmentsApi, formsApi } from '../lib/api';
 import {
   formatDate, formatPhone, formatWeight, formatBP,
@@ -72,6 +73,7 @@ export default function PatientDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { user: me } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [addProgressOpen, setAddProgressOpen] = useState(false);
 
@@ -153,12 +155,19 @@ export default function PatientDetail() {
   return (
     <div className="space-y-5">
       {/* Back button */}
-      <button
-        onClick={() => navigate('/patients')}
-        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back to Patients
-      </button>
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => navigate('/patients')}
+          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back to Patients
+        </button>
+        {me?.role === 'superuser' && (
+          <button onClick={() => navigate(`/audit?patientId=${id}`)} className="text-sm text-blue-600 hover:underline">
+            Who accessed this chart? (audit trail)
+          </button>
+        )}
+      </div>
 
       {/* Sticky patient header */}
       <Card className="bg-gradient-to-r from-blue-600 to-blue-700 text-white border-0">

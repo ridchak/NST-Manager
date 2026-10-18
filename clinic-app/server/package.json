@@ -10,8 +10,8 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "ts-node prisma/seed.ts",
     "db:studio": "prisma studio",
-    "test": "node --require ts-node/register/transpile-only --test src/services/protocol.test.ts src/services/nexhealth.test.ts src/services/access.test.ts",
-    "test:int": "DATABASE_URL=file:./test.db npx prisma migrate reset --force --skip-seed --skip-generate >/dev/null && DATABASE_URL=file:./test.db npm run db:seed >/dev/null && DATABASE_URL=file:./test.db node --require ts-node/register/transpile-only --test --test-concurrency=1 src/services/assistant.test.ts src/services/auth.test.ts",
+    "test": "node --require ts-node/register/transpile-only --test src/services/protocol.test.ts src/services/nexhealth.test.ts src/services/access.test.ts src/services/audit.unit.test.ts",
+    "test:int": "DATABASE_URL=file:./test.db npx prisma migrate reset --force --skip-seed --skip-generate >/dev/null && DATABASE_URL=file:./test.db npm run db:seed >/dev/null && DATABASE_URL=file:./test.db node --require ts-node/register/transpile-only --test --test-concurrency=1 src/services/assistant.test.ts src/services/auth.test.ts src/services/audit.test.ts",
     "test:all": "npm test && npm run test:int",
     "create-superuser": "ts-node scripts/createSuperuser.ts"
   },

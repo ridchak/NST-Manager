@@ -12,6 +12,7 @@ import InsuranceAuth from './pages/InsuranceAuth';
 import PhoneSystem from './pages/PhoneSystem';
 import Settings from './pages/Settings';
 import Messages from './pages/Messages';
+import AuditLog from './pages/AuditLog';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="insurance" element={<InsuranceAuth />} />
         <Route path="phone" element={<PhoneSystem />} />
         <Route path="messages" element={<Messages />} />
+        <Route path="audit" element={<AuditLog />} />
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

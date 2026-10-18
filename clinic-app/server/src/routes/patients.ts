@@ -4,6 +4,9 @@ import prisma from '../lib/prisma';
 
 const router = Router();
 
+// SQLite's LIKE is already case-insensitive and rejects Prisma's `mode` option; Postgres needs it.
+const ci = (process.env.DATABASE_URL ?? '').startsWith('postgres') ? { mode: 'insensitive' as const } : {};
+
 function transformPatient(p: any) {
   return { ...p, status: 'active', insurances: p.insuranceInfos ?? [] };
 }
@@ -17,10 +20,10 @@ router.get('/', async (req: Request, res: Response) => {
     const where = search
       ? {
           OR: [
-            { firstName: { contains: search, mode: 'insensitive' as const } },
-            { lastName: { contains: search, mode: 'insensitive' as const } },
+            { firstName: { contains: search, ...ci } },
+            { lastName: { contains: search, ...ci } },
             { mrn: { contains: search } },
-            { email: { contains: search, mode: 'insensitive' as const } },
+            { email: { contains: search, ...ci } },
             { phone: { contains: search } },
           ],
         }

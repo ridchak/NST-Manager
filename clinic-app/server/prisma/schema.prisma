@@ -172,3 +172,33 @@ model CallLog {
   updatedAt   DateTime @updatedAt
   patient     Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
 }
+
+/// Append-only record of who accessed or changed what. Deliberately has no relations, so deleting a
+/// user or patient never touches history. Never stores request bodies or field values (no PHI).
+/// Each row's hash covers the previous row's hash, so removing or editing a row is detectable.
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  at         DateTime
+  actorType  String   // user | assistant | anonymous
+  actorId    String?
+  actorEmail String?
+  actorRole  String?
+  action     String   // view | create | update | delete | login | login_failed | account_locked | ...
+  resource   String?  // patients | appointments | progress | forms | insurance | messages | users | audit | call ...
+  resourceId String?
+  patientId  String?
+  outcome    String   // success | denied | failed
+  statusCode Int?
+  method     String?
+  path       String?
+  ip         String?
+  userAgent  String?
+  detail     String?
+  prevHash   String
+  hash       String
+
+  @@index([at])
+  @@index([patientId, at])
+  @@index([actorId, at])
+  @@index([action, at])
+}

@@ -74,9 +74,9 @@ All rules live in `protocol.ts` and are covered by tests (`npm test`).
   Staff enter them from the message. If you have eCW API access, this is the place to add it.
 - **Check-in** notifies staff; it does not mark the patient arrived in eCW.
 - **HIPAA.** Your agreement with NexHealth covers that vendor. You still need signed BAAs with the voice platform
-  and the hosting provider, an encrypted managed database with backups (not the SQLite file), and an audit log of
-  who viewed or changed records (not built yet). Staff access levels and sign-in lockout are built (see README).
-  The staff email notification intentionally contains no clinical details.
+  and the hosting provider, and an encrypted managed database with backups (not the SQLite file). Staff access
+  levels, sign-in lockout and an audit log (including every assistant call) are built; see the README and
+  `docs/AUDIT_LOG.md`. The staff email notification intentionally contains no clinical details.
 - **Run it in production with one server instance.** Call sessions (verification state) are kept in memory.
 - **Clinical review.** Have the physician test call every scenario and sign off on the wording.
 

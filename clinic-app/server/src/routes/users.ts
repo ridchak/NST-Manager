@@ -50,6 +50,7 @@ router.post('/', async (req: Request, res: Response) => {
       data: { ...body, password: await bcrypt.hash(body.password, 10) },
       select,
     });
+    res.locals.auditDetail = `account: ${user.email}, level: ${user.role}`;
     res.status(201).json(present(user));
   } catch (err: any) {
     if (err.name === 'ZodError') return res.status(400).json({ error: err.errors });
@@ -82,6 +83,10 @@ router.patch('/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'There must always be at least one active superuser.' });
     }
 
+    const changes: string[] = [`account: ${target.email}`];
+    if (body.role && body.role !== target.role) changes.push(`level ${target.role} -> ${body.role}`);
+    if (body.active !== undefined && body.active !== target.active) changes.push(body.active ? 'reactivated' : 'deactivated');
+    res.locals.auditDetail = changes.join(', ');
     const user = await prisma.user.update({ where: { id: target.id }, data: body, select });
     res.json(present(user));
   } catch (err: any) {
@@ -94,6 +99,7 @@ router.post('/:id/unlock', async (req: Request, res: Response) => {
   try {
     const user = await prisma.user.update({ where: { id: req.params.id }, data: { failedLogins: 0, lockedUntil: null }, select });
     console.warn(`SECURITY: ${req.user!.email} unlocked ${user.email}`);
+    res.locals.auditDetail = `account: ${user.email}`;
     res.json(present(user));
   } catch (err: any) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'User not found' });
@@ -110,6 +116,7 @@ router.post('/:id/reset-password', async (req: Request, res: Response) => {
       select,
     });
     console.warn(`SECURITY: ${req.user!.email} reset the password for ${user.email}`);
+    res.locals.auditDetail = `account: ${user.email}`;
     res.json(present(user));
   } catch (err: any) {
     if (err.name === 'ZodError') return res.status(400).json({ error: err.errors });
@@ -126,6 +133,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     if (target.role === 'superuser' && (await otherActiveSuperusers(target.id)) === 0) {
       return res.status(400).json({ error: 'There must always be at least one active superuser.' });
     }
+    res.locals.auditDetail = `account: ${target.email}`;
     await prisma.user.delete({ where: { id: target.id } });
     res.json({ message: 'User deleted' });
   } catch (err: any) {

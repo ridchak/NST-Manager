@@ -344,6 +344,11 @@ export async function runTool(name: string, rawArgs: unknown, now = new Date()):
   }
 }
 
+/** The clinic-database patient id the caller was verified as, for the audit log. */
+export function sessionPatientId(callId: string): string | null {
+  return sessions.get(callId)?.localPatientId ?? null;
+}
+
 export function resetSessionsForTest() {
   sessions.clear();
 }

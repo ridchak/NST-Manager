@@ -82,6 +82,12 @@ SUPERUSER_PASSWORD="a-long-passphrase" npm run create-superuser -- you@yourclini
 - Passwords must be at least 10 characters. Sessions last 12 hours.
 - Manage accounts at **Settings → Users** (superuser only). Accounts with appointment history are deactivated rather than deleted.
 
+## Audit log
+
+Superusers can see who viewed or changed which patient's record, and when, at **Audit Log**. It stores no
+patient details, cannot be edited or deleted, and can prove it has not been tampered with. See
+[docs/AUDIT_LOG.md](docs/AUDIT_LOG.md) for exactly what is and is not covered.
+
 ## Integrations
 
 ### RingCentral Office@Hand

@@ -43,6 +43,7 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(() => {
+    authApi.logout().catch(() => undefined); // best effort: records the sign-out in the audit log
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setState({ user: null, token: null, isAuthenticated: false, isLoading: false });

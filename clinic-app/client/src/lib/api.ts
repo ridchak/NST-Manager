@@ -24,6 +24,7 @@ api.interceptors.response.use(
 export const authApi = {
   login: (email: string, password: string) => api.post('/auth/login', { email, password }).then(r => r.data),
   getMe: () => api.get('/auth/me').then(r => r.data),
+  logout: () => api.post('/auth/logout').then(r => r.data),
   changePassword: (current: string, next: string) => api.post('/auth/change-password', { currentPassword: current, newPassword: next }).then(r => r.data),
 };
 
@@ -78,6 +79,24 @@ export const phoneApi = {
   getMessages: (limit?: number) => api.get('/phone/messages', { params: { limit } }).then(r => r.data),
   sendMessage: (toNumber: string, text: string) => api.post('/phone/message', { toNumber, text }).then(r => r.data),
   getVoicemails: () => api.get('/phone/voicemails').then(r => r.data),
+};
+
+export interface AuditFilters { from?: string; to?: string; actorId?: string; patientId?: string; action?: string; outcome?: string }
+
+export const auditApi = {
+  list: (params: AuditFilters & { page?: number; limit?: number }) => api.get('/audit', { params }).then(r => r.data),
+  actions: () => api.get('/audit/actions').then(r => r.data),
+  verify: () => api.get('/audit/verify').then(r => r.data),
+  /** Downloads the filtered log as a CSV file. */
+  async exportCsv(params: AuditFilters) {
+    const res = await api.get('/audit/export', { params, responseType: 'blob' });
+    const url = URL.createObjectURL(res.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };
 
 export const usersApi = {

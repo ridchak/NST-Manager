@@ -12,6 +12,7 @@ const titles: Record<string, string> = {
   '/forms': 'Intake Forms',
   '/insurance': 'Insurance Authorization',
   '/messages': 'Messages',
+  '/audit': 'Audit Log',
   '/phone': 'Phone System',
   '/settings': 'Settings',
 };

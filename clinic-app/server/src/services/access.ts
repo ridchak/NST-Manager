@@ -4,7 +4,7 @@
  *   user       view records and add new ones. Cannot edit existing records or delete.
  *   admin      everything a user can do, plus edit existing records
  *              (patients, progress, forms, insurance authorizations, appointments).
- *   superuser  full control: delete records, manage accounts, unlock locked accounts.
+ *   superuser  full control: delete records, manage accounts, unlock locked accounts, read the audit log.
  *
  * The rule is by HTTP method, with a short list of exceptions for routine front-desk work.
  */
@@ -41,7 +41,7 @@ export function requiredRole(method: string, apiPath: string): Role {
   const m = method.toUpperCase();
   const path = apiPath.split('?')[0].replace(/\/+$/, '') || '/';
 
-  if (path === '/users' || path.startsWith('/users/')) return 'superuser';
+  if (['/users', '/audit'].some(p => path === p || path.startsWith(p + '/'))) return 'superuser';
 
   const exception = EXCEPTIONS.find(e => e.method === m && e.pattern.test(path));
   if (exception) return exception.needs;
