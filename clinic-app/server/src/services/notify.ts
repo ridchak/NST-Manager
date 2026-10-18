@@ -1,7 +1,8 @@
 import nodemailer from 'nodemailer';
 import prisma from '../lib/prisma';
+import { getPractice } from './practice';
 
-export type MessageType = 'refill' | 'side-effect' | 'prior-auth' | 'check-in' | 'med-question' | 'callback' | 'general';
+export type MessageType = 'new-patient' | 'refill' | 'side-effect' | 'prior-auth' | 'check-in' | 'med-question' | 'callback' | 'general';
 
 export interface StaffMessageInput {
   type: MessageType;
@@ -40,7 +41,7 @@ export async function sendStaffMessage(input: StaffMessageInput) {
     },
   });
 
-  const to = process.env.STAFF_EMAIL;
+  const to = getPractice().notificationEmail || process.env.STAFF_EMAIL;
   const transport = mailer();
   if (to && transport) {
     try {

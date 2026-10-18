@@ -119,6 +119,8 @@ export interface PracticeDetails {
   phone: string; fax: string | null; timezone: string; hours: string;
   phoneDisplay: string; faxDisplay: string | null; addressLine: string;
   hoursByDay: Record<string, [string, string] | null>; hoursText: string;
+  extFrontDesk: string | null; extScheduling: string | null; extMedications: string | null; extBilling: string | null;
+  notificationEmail: string | null;
   isDefault: boolean; overriddenByEnvironment: boolean;
 }
 

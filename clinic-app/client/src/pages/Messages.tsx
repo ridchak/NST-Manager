@@ -8,6 +8,7 @@ import Badge from '../components/ui/Badge';
 
 const typeLabels: Record<string, string> = {
   refill: 'Refill',
+  'new-patient': 'New patient',
   'side-effect': 'Side effect',
   'prior-auth': 'Prior auth',
   'check-in': 'Check-in',

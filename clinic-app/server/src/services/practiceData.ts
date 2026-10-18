@@ -53,7 +53,9 @@ function spread(slots: Slot[], hours: OfficeHours, perDay = 2, maxSlots = 6): Sl
 
 export class LocalPracticeData implements PracticeData {
   readonly mode = 'local' as const;
-  constructor(private hours: OfficeHours = loadOfficeHours()) {}
+  /** Read on every use so changes made in Settings (hours, time zone) take effect immediately. */
+  constructor(private hoursOverride?: OfficeHours) {}
+  private get hours(): OfficeHours { return this.hoursOverride ?? loadOfficeHours(); }
 
   async findPatientsByPhone(phone: string): Promise<PatientRef[]> {
     const target = normalizePhone(phone);
@@ -144,7 +146,8 @@ export class LocalPracticeData implements PracticeData {
 
 export class NexHealthPracticeData implements PracticeData {
   readonly mode = 'nexhealth' as const;
-  constructor(private client: NexHealthClient, private hours: OfficeHours = loadOfficeHours()) {}
+  constructor(private client: NexHealthClient, private hoursOverride?: OfficeHours) {}
+  private get hours(): OfficeHours { return this.hoursOverride ?? loadOfficeHours(); }
 
   async findPatientsByPhone(phone: string): Promise<PatientRef[]> {
     const target = normalizePhone(phone);

@@ -228,7 +228,7 @@ export function decideRefill(ctx: RefillContext, isGlp1?: boolean): RefillDecisi
       action: 'offer_visit',
       hasUpcoming: hasFollowUp,
       say: hasFollowUp
-        ? 'For GLP-1 refills we need to see you more regularly. I can book a new visit or move your current appointment to an earlier date. Which would you prefer?'
+        ? 'For GLP-1 refills we need to see you more regularly. I can book an additional visit sooner, or connect you with our scheduling team to move your current appointment. Which would you prefer?'
         : 'For GLP-1 refills we need to see you regularly, and I do not see an appointment on your chart. Let me schedule one for you now.',
     };
   }

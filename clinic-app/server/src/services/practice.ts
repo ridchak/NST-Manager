@@ -20,6 +20,13 @@ export interface PracticeInfo {
   timezone: string; // IANA
   /** "Mon 08:00-17:00; Tue 08:00-16:00; ..." Days not listed are closed. */
   hours: string;
+  /** Office extensions the phone assistant transfers to during office hours. */
+  extFrontDesk: string | null;
+  extScheduling: string | null;
+  extMedications: string | null;
+  extBilling: string | null;
+  /** Where new-request notifications are emailed. No clinical detail is ever included. */
+  notificationEmail: string | null;
 }
 
 export const DEFAULT_PRACTICE: PracticeInfo = {
@@ -34,6 +41,11 @@ export const DEFAULT_PRACTICE: PracticeInfo = {
   timezone: 'America/Chicago',
   // Mon & Thu 8-5, Tue & Fri 8-4, Sat 9-3. Wednesday and Sunday closed.
   hours: 'Mon 08:00-17:00; Tue 08:00-16:00; Thu 08:00-17:00; Fri 08:00-16:00; Sat 09:00-15:00',
+  extFrontDesk: '101',
+  extScheduling: '102',
+  extMedications: '103',
+  extBilling: '104',
+  notificationEmail: null, // set in Settings > Practice; kept out of the code
 };
 
 let current: PracticeInfo = { ...DEFAULT_PRACTICE };
@@ -52,7 +64,9 @@ export async function refreshPractice(): Promise<void> {
   try {
     const row = await prisma.practiceSettings.findUnique({ where: { id: 1 } });
     if (row) {
-      current = { name: row.name, street: row.street, suite: row.suite, city: row.city, state: row.state, zip: row.zip, phone: row.phone, fax: row.fax, timezone: row.timezone, hours: row.hours };
+      current = { name: row.name, street: row.street, suite: row.suite, city: row.city, state: row.state, zip: row.zip, phone: row.phone, fax: row.fax, timezone: row.timezone, hours: row.hours,
+        extFrontDesk: row.extFrontDesk, extScheduling: row.extScheduling, extMedications: row.extMedications, extBilling: row.extBilling,
+        notificationEmail: row.notificationEmail };
       usingDefaults = false;
     } else {
       current = { ...DEFAULT_PRACTICE };

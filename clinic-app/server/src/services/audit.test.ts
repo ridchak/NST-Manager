@@ -45,7 +45,11 @@ async function tokenFor(role: 'user' | 'admin' | 'superuser') {
   assert.equal(r.status, 200);
   return { ...u, token: r.body.token as string };
 }
+/** The server records each entry just after it sends its response, so let in-flight writes land before looking. */
+const settle = () => new Promise(r => setTimeout(r, 40));
+
 async function rows(where: Record<string, unknown> = {}) {
+  await settle();
   await flushAudit();
   return prisma.auditLog.findMany({ where, orderBy: { id: 'asc' } });
 }
@@ -179,6 +183,7 @@ test('superuser can search by patient, action and outcome, with paging and a lim
   const su = await tokenFor('superuser');
   const pat = await prisma.patient.findFirstOrThrow({ where: { mrn: 'MRN-001' } });
   await api('GET', `/patients/${pat.id}`, su.token);
+  await settle();
   await flushAudit();
   const byPatient = await api('GET', `/audit?patientId=${pat.id}&action=view&outcome=success`, su.token);
   assert.equal(byPatient.status, 200);

@@ -217,5 +217,12 @@ model PracticeSettings {
   fax       String?  // 10 digits
   timezone  String   // IANA, e.g. America/Chicago
   hours     String   // "Mon 08:00-17:00; Tue 08:00-16:00; ..." (days not listed are closed)
+  // Office extensions the phone assistant transfers to during office hours
+  extFrontDesk   String?
+  extScheduling  String?
+  extMedications String?
+  extBilling     String?
+  /// Where new-request notifications are emailed (no clinical detail is ever included)
+  notificationEmail String?
   updatedAt DateTime @updatedAt
 }

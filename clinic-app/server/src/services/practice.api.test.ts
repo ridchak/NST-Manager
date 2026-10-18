@@ -39,6 +39,8 @@ const DEFAULT_BODY = {
   name: DEFAULT_PRACTICE.name, street: DEFAULT_PRACTICE.street, suite: DEFAULT_PRACTICE.suite, city: DEFAULT_PRACTICE.city,
   state: DEFAULT_PRACTICE.state, zip: DEFAULT_PRACTICE.zip, phone: DEFAULT_PRACTICE.phone, fax: DEFAULT_PRACTICE.fax,
   timezone: DEFAULT_PRACTICE.timezone,
+  extFrontDesk: '101', extScheduling: '102', extMedications: '103', extBilling: '104',
+  notificationEmail: null as string | null,
   hours: { 0: null, 1: ['08:00', '17:00'], 2: ['08:00', '16:00'], 3: null, 4: ['08:00', '17:00'], 5: ['08:00', '16:00'], 6: ['09:00', '15:00'] },
 };
 
@@ -55,6 +57,8 @@ test('anyone signed in can read the practice details; the defaults are the real 
   assert.equal(r.body.hoursByDay['0'], null, 'Sunday closed');
   assert.deepEqual(r.body.hoursByDay['6'], ['09:00', '15:00']);
   assert.match(r.body.hoursText, /closed Wednesday and Sunday/);
+  assert.deepEqual([r.body.extFrontDesk, r.body.extScheduling, r.body.extMedications, r.body.extBilling], ['101', '102', '103', '104']);
+  assert.equal(r.body.notificationEmail, null, 'no email address is built in');
 });
 
 test('only a superuser can change them', async () => {
@@ -73,6 +77,9 @@ test('invalid details are rejected with a readable message', async () => {
   assert.match((await bad({ timezone: 'Mars/Olympus' })).body.error, /time zone/i);
   assert.match((await bad({ hours: { ...DEFAULT_BODY.hours, 1: ['17:00', '08:00'] } })).body.error, /after opening/);
   assert.match((await bad({ hours: { ...DEFAULT_BODY.hours, 1: ['8am', '5pm'] } })).body.error, /24-hour/);
+  assert.match((await bad({ extBilling: 'abc' })).body.error, /Billing extension/);
+  assert.match((await bad({ extScheduling: '1' })).body.error, /Scheduling extension/);
+  assert.match((await bad({ notificationEmail: 'not an email' })).body.error, /notification email/);
   assert.match((await bad({ hours: { 0: null, 1: null, 2: null, 3: null, 4: null, 5: null, 6: null } })).body.error, /At least one day/);
 });
 
@@ -94,6 +101,7 @@ test('saved changes persist, take effect for the assistant at once, and are audi
   await refreshPractice();
   assert.equal((await api('GET', '/practice', su.token)).body.phoneDisplay, '(312) 555-0142');
 
+  await new Promise(r => setTimeout(r, 40)); // the entry is written just after the response
   await flushAudit();
   const log = await prisma.auditLog.findMany({ where: { actorId: su.id, resource: 'practice', action: 'update' } });
   assert.equal(log.length, 1);
@@ -118,4 +126,15 @@ test('provider phone numbers: extension and cell are validated and stored in dia
   assert.match((await api('PATCH', `/users/${id}`, su.token, { extension: 'abc' })).body.error, /Extension/);
   const cleared = await api('PATCH', `/users/${id}`, su.token, { cellPhone: '', extension: '' });
   assert.deepEqual([cleared.body.cellPhone, cleared.body.extension], [null, null]);
+});
+
+test('extensions and the notification email can be changed and cleared, and stay that way', async () => {
+  const su = await tokenFor('superuser');
+  const saved = await api('PUT', '/practice', su.token, { ...DEFAULT_BODY, extScheduling: '202', extBilling: '', notificationEmail: 'desk@example.test' });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  assert.deepEqual([saved.body.extScheduling, saved.body.extBilling, saved.body.notificationEmail], ['202', null, 'desk@example.test']);
+  await refreshPractice();
+  const again = (await api('GET', '/practice', su.token)).body;
+  assert.deepEqual([again.extFrontDesk, again.extScheduling, again.extBilling], ['101', '202', null], 'a cleared extension does not silently revert to the default');
+  assert.equal((await api('PUT', '/practice', su.token, DEFAULT_BODY)).status, 200);
 });

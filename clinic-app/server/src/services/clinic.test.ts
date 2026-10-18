@@ -32,3 +32,18 @@ test('the phone assistant introduces the practice by name and carries no old bra
     if (saved !== undefined) process.env.CLINIC_NAME = saved;
   }
 });
+
+test('the tool list given to the voice platform matches the tools the server implements', async () => {
+  const { TOOL_NAMES } = await import('./assistant');
+  const { TOOL_DEFINITIONS } = await import('./assistantPrompt');
+  assert.deepEqual(TOOL_DEFINITIONS.map(t => t.name).sort(), [...TOOL_NAMES].sort());
+});
+
+test('the prompt tells the assistant which extension handles what', () => {
+  const p = buildSystemPrompt();
+  assert.match(p, /Scheduling \(extension 102\).*sooner.*reschedule.*different provider/s);
+  assert.match(p, /Medications and prior authorization \(extension 103\)/);
+  assert.match(p, /Billing \(extension 104\)/);
+  assert.match(p, /Front desk \(extension 101\)/);
+  assert.match(p, /Never move, cancel or change an existing appointment yourself/);
+});

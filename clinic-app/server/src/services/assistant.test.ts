@@ -3,10 +3,10 @@ import test, { before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.OFFICE_TZ = 'America/New_York';
-process.env.FRONT_DESK_NUMBER = '+15550100000';
 
 import prisma from '../lib/prisma';
 import { runTool, resetSessionsForTest } from './assistant';
+import { getPractice, savePractice } from './practice';
 
 const OPEN = 'Mon-Sun 00:00-23:59';
 const CLOSED = ';';
@@ -66,8 +66,7 @@ test('wrong DOB fails, three failures lock the call and send to front desk', asy
   const bad = { callerPhone: JENNIFER.callerPhone, dateOfBirth: '01/01/1990' };
   for (let i = 0; i < 3; i++) assert.equal((await call('identify_patient', { callId: 'x2', ...bad })).verified, false);
   const locked = await call('identify_patient', { callId: 'x2', ...JENNIFER });
-  assert.equal(locked.action, 'transfer_front_desk');
-  assert.equal(locked.transferNumber, '+15550100000');
+  assert.deepEqual([locked.action, locked.department, locked.transferNumber], ['transfer', 'front_desk', '101']);
 });
 
 test('caller ID that matches nobody cannot be verified', async () => {
@@ -110,7 +109,7 @@ test('refill: no follow-up -> asks GLP-1; yes -> offers visit; books follow-up',
   assert.equal(dup.booked, false);
 });
 
-test('GLP-1 patient with a far-off appointment can move it sooner (old one cancelled)', async () => {
+test('GLP-1 patient with a far-off appointment: can book an additional visit, but moving the existing one goes to scheduling', async () => {
   const lisa = await prisma.patient.findUniqueOrThrow({ where: { mrn: 'MRN-005' } });
   const prov = await prisma.user.findFirstOrThrow({ where: { isProvider: true } });
   await prisma.appointment.deleteMany({ where: { patientId: lisa.id } });
@@ -119,16 +118,14 @@ test('GLP-1 patient with a far-off appointment can move it sooner (old one cance
   const r = await call('request_refill', { callId: 'x7', medication: 'semaglutide', isGlp1: true });
   assert.equal(r.action, 'offer_visit');
   assert.equal(r.hasUpcoming, true);
-  assert.equal(r.upcomingVisitId, far.id);
+  assert.match(r.nextStep, /transfer_to_department with department scheduling/);
+  assert.match(r.say, /scheduling team/);
+  // Booking an earlier visit works and leaves the existing one alone, even if the caller passes an old-style "replace" id.
   const slots = await call('find_slots', { callId: 'x7', visitType: 'follow-up' });
-  const moved = await call('book_appointment', { callId: 'x7', slotId: slots.slots[0].slotId, visitType: 'follow-up', replaceVisitId: far.id });
-  assert.equal(moved.booked, true);
-  assert.equal((await prisma.appointment.findUniqueOrThrow({ where: { id: far.id } })).status, 'cancelled');
-  // Cannot move somebody else's / arbitrary appointment.
-  const other = await prisma.appointment.findFirstOrThrow({ where: { NOT: { patientId: lisa.id } } });
-  const bad = await call('book_appointment', { callId: 'x7', slotId: slots.slots[1].slotId, visitType: 'follow-up', replaceVisitId: other.id });
-  assert.match(bad.error, /cannot be moved/i);
-  assert.equal((await prisma.appointment.findUniqueOrThrow({ where: { id: other.id } })).status !== 'cancelled', true);
+  const booked = await call('book_appointment', { callId: 'x7', slotId: slots.slots[0].slotId, visitType: 'follow-up', replaceVisitId: far.id });
+  assert.equal(booked.booked, true);
+  assert.equal((await prisma.appointment.findUniqueOrThrow({ where: { id: far.id } })).status, 'scheduled', 'the assistant never cancels or moves an existing appointment');
+  assert.match(slots.ifNoneSuitable, /sooner.*different provider.*reschedule.*scheduling/s);
 });
 
 test('refill after hours is queued for staff', async () => {
@@ -175,14 +172,102 @@ test('prior authorization creates a staff message', async () => {
   assert.equal((await messages('prior-auth')).length, 1);
 });
 
-test('medication question: extension in hours, cell after hours', async () => {
+test('medication question: medication team extension 103 in hours, prescriber cell after hours', async () => {
   await verify('x13', JENNIFER);
   const day = await call('medication_question', { callId: 'x13', question: 'can I take it with food?' });
-  assert.equal(day.action, 'transfer');
-  assert.match(day.transferNumber, /^(101|102)$/);
+  assert.deepEqual([day.action, day.department, day.transferNumber, day.transferType], ['transfer', 'medications', '103', 'extension']);
   setHours(CLOSED);
   const night = await call('medication_question', { callId: 'x13' });
+  assert.equal(night.action, 'transfer');
+  assert.equal(night.transferType, 'phone');
   assert.match(night.transferNumber, /^\+1555010010[12]$/);
+});
+
+test('medication question in hours with no extension configured leaves an urgent message instead of a dead transfer', async () => {
+  const before = getPractice();
+  await savePractice({ ...before, extMedications: null });
+  try {
+    await verify('x13b', JENNIFER);
+    const r = await call('medication_question', { callId: 'x13b', question: 'dose?' });
+    assert.equal(r.action, 'message_taken');
+    const m = (await messages('callback'))[0];
+    assert.equal(m.priority, 'urgent');
+    assert.match(m.body, /dose\?/);
+  } finally {
+    await savePractice(before);
+  }
+});
+
+test('transfer_to_department: every department goes to its own extension during office hours, no verification needed', async () => {
+  const expected: Record<string, string> = { front_desk: '101', scheduling: '102', medications: '103', billing: '104' };
+  for (const [dept, ext] of Object.entries(expected)) {
+    const r = await call('transfer_to_department', { callId: `dept-${dept}`, department: dept, reason: 'wants to talk to someone' });
+    assert.deepEqual([r.action, r.department, r.transferNumber, r.transferType], ['transfer', dept, ext, 'extension']);
+  }
+  assert.equal((await messages('callback')).length, 0, 'nothing to call back when the transfer happens');
+});
+
+test('transfer_to_department after hours takes a call-back message and does not transfer', async () => {
+  setHours(CLOSED);
+  const r = await call('transfer_to_department', { callId: 'dept-closed', department: 'billing', reason: 'question about a statement', callerName: 'Pat Caller', callerPhone: '(630) 555-0123' });
+  assert.equal(r.action, 'message_taken');
+  assert.equal(r.transferNumber, undefined);
+  assert.match(r.say, /closed/i);
+  const m = (await messages('callback'))[0];
+  assert.match(m.subject, /billing team.*Pat Caller/i);
+  assert.match(m.body, /question about a statement/);
+  assert.match(m.body, /630\) 555-0123/);
+});
+
+test('rescheduling or switching providers is a scheduling-team transfer (not done by the assistant)', async () => {
+  await verify('x20', JENNIFER);
+  const r = await call('transfer_to_department', { callId: 'x20', department: 'scheduling', reason: 'wants to reschedule' });
+  assert.deepEqual([r.action, r.transferNumber], ['transfer', '102']);
+});
+
+test('no suitable open times: the assistant offers the scheduling team', async () => {
+  setHours(CLOSED); // no open times exist
+  await verify('x21', JENNIFER);
+  const r = await call('find_slots', { callId: 'x21', visitType: 'follow-up' });
+  assert.equal(r.action, 'offer_scheduling_team');
+  assert.match(r.nextStep, /scheduling/);
+});
+
+test('new patient: details are passed to scheduling; in hours a live transfer to 102 is offered', async () => {
+  const r = await call('request_new_patient_appointment', { callId: 'np1', firstName: 'Nora', lastName: 'Newpatient', dateOfBirth: '04/09/1988', phone: '(630) 555-0188', preferredProvider: 'Dr. Chakeer', reason: 'interested in weight loss' });
+  assert.equal(r.sent, true);
+  assert.deepEqual(r.offerTransfer, { department: 'scheduling', transferNumber: '102' });
+  const m = (await messages('new-patient'))[0];
+  assert.match(m.subject, /Nora Newpatient/);
+  assert.match(m.body, /1988-04-09/);
+  assert.match(m.body, /Prefers: Dr\. Chakeer/);
+});
+
+test('new patient after hours: recorded for a call back, no transfer offered', async () => {
+  setHours(CLOSED);
+  const r = await call('request_new_patient_appointment', { callId: 'np2', firstName: 'Sam', lastName: 'Evening', dateOfBirth: '1990-12-01', phone: '6305550142' });
+  assert.equal(r.sent, true);
+  assert.equal(r.offerTransfer, undefined);
+  assert.match(r.say, /closed/i);
+  assert.match((await messages('new-patient'))[0].body, /Received after hours/);
+});
+
+test('new patient requests reject a bad date of birth or phone number', async () => {
+  const bad = await runTool('request_new_patient_appointment', { callId: 'np3', firstName: 'A', lastName: 'B', dateOfBirth: 'someday', phone: '(630) 555-0188' });
+  assert.equal(bad.status, 400);
+  assert.equal((await runTool('request_new_patient_appointment', { callId: 'np3', firstName: 'A', lastName: 'B', dateOfBirth: '1990-01-01', phone: '12345' })).status, 400);
+  assert.equal((await messages('new-patient')).length, 0);
+});
+
+test('prior authorization in hours offers a live transfer to 103; after hours it just records the request', async () => {
+  await verify('x22', JENNIFER);
+  const day = await call('request_prior_auth', { callId: 'x22', medication: 'Wegovy' });
+  assert.deepEqual(day.offerTransfer, { department: 'medications', transferNumber: '103' });
+  setHours(CLOSED);
+  const night = await call('request_prior_auth', { callId: 'x22', medication: 'Zepbound' });
+  assert.equal(night.sent, true);
+  assert.equal(night.offerTransfer, undefined);
+  assert.equal((await messages('prior-auth')).length, 2, 'both requests are recorded either way');
 });
 
 test('check-in with an appointment today notifies staff', async () => {

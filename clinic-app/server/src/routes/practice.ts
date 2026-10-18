@@ -31,6 +31,9 @@ const validTimezone = (tz: string) => {
   try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; } catch { return false; }
 };
 
+/** Office extension: 2-6 digits, or blank for none. */
+const extension = (label: string) => z.string().trim().nullable().optional().refine(v => !v || /^\d{2,6}$/.test(v), `${label} extension must be 2 to 6 digits`);
+
 const updateSchema = z.object({
   name: z.string().trim().min(1).max(120),
   street: z.string().trim().min(1).max(120),
@@ -43,6 +46,11 @@ const updateSchema = z.object({
   timezone: z.string().refine(validTimezone, 'Unknown time zone'),
   // keys "0".."6" (Sunday..Saturday); null = closed
   hours: z.record(z.string().regex(/^[0-6]$/), z.tuple([hhmm, hhmm]).nullable()),
+  extFrontDesk: extension('Front desk'),
+  extScheduling: extension('Scheduling'),
+  extMedications: extension('Medications'),
+  extBilling: extension('Billing'),
+  notificationEmail: z.string().trim().nullable().optional().refine(v => !v || z.string().email().safeParse(v).success, 'Enter a valid notification email address'),
 });
 
 router.put('/', async (req: Request, res: Response) => {
@@ -58,6 +66,9 @@ router.put('/', async (req: Request, res: Response) => {
       name: body.name, street: body.street, suite: body.suite || null, city: body.city, state: body.state, zip: body.zip,
       phone: digits10(body.phone)!, fax: body.fax ? digits10(body.fax) : null, timezone: body.timezone,
       hours: hoursToSpec(days),
+      extFrontDesk: body.extFrontDesk || null, extScheduling: body.extScheduling || null,
+      extMedications: body.extMedications || null, extBilling: body.extBilling || null,
+      notificationEmail: body.notificationEmail || null,
     };
     await savePractice(info);
     res.locals.auditDetail = 'practice details updated';

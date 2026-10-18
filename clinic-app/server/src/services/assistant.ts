@@ -7,6 +7,9 @@ import {
 import { sendStaffMessage } from './notify';
 import { RingCentralService } from './ringcentral';
 import { clinicName } from '../lib/clinic';
+import { getPractice } from './practice';
+import { DEPARTMENTS, DEPARTMENT_LABELS, Department, decideTransfer, extensionFor } from './routing';
+import { digits10 } from '../lib/phone';
 
 /**
  * Tool handlers called by the voice-AI platform during a phone call.
@@ -29,8 +32,31 @@ interface CallSession {
 
 const sessions = new Map<string, CallSession>();
 
-function frontDesk() {
-  return process.env.FRONT_DESK_NUMBER || null;
+interface RouteOptions {
+  callId: string;
+  reason?: string;
+  patient?: PatientRef;
+  localPatientId?: string | null;
+  callerName?: string;
+  callerPhone?: string;
+  priority?: 'normal' | 'urgent';
+}
+
+/**
+ * Sends the call to a department's extension during office hours. After hours (or if no extension is
+ * set) nobody can take it, so a call-back message is recorded for that department instead.
+ */
+async function routeToDepartment(dept: Department, now: Date, o: RouteOptions) {
+  const decision = decideTransfer(dept, isOfficeOpen(now, loadOfficeHours()), getPractice());
+  if (decision.action === 'message_taken') {
+    const who = o.patient ? `${o.patient.firstName} ${o.patient.lastName}` : o.callerName || 'Unidentified caller';
+    await sendStaffMessage({
+      type: 'callback', callId: o.callId, patientId: o.localPatientId, priority: o.priority ?? 'normal',
+      subject: `Call back requested (${DEPARTMENT_LABELS[dept].replace(/^the |^our /, '')}): ${who}`,
+      body: [`Caller asked for ${DEPARTMENT_LABELS[dept]}${o.reason ? `: ${o.reason}` : '.'}`, o.callerPhone ? `Call back number: ${o.callerPhone}` : ''].filter(Boolean).join('\n'),
+    });
+  }
+  return decision;
 }
 
 function sweep() {
@@ -63,6 +89,12 @@ async function localPatientId(pd: PracticeData, p: PatientRef): Promise<string |
   return row?.id ?? null;
 }
 
+function hasUpcomingText(hasUpcoming: boolean): string {
+  return hasUpcoming
+    ? 'To see the patient sooner: use find_slots (visitType follow-up) and book_appointment for an additional earlier visit. If they want to MOVE their existing appointment, call transfer_to_department with department scheduling.'
+    : 'Use find_slots (visitType follow-up) and book_appointment to schedule one.';
+}
+
 function parseDob(input: string): string | null {
   const t = input.trim();
   let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
@@ -90,12 +122,28 @@ const schemas = {
   get_balance: z.object({ callId: z.string().min(1) }),
   get_copay: z.object({ callId: z.string().min(1) }),
   find_slots: z.object({ callId: z.string().min(1), visitType, notBefore: z.string().optional() }),
-  book_appointment: z.object({ callId: z.string().min(1), slotId: z.string().min(1), visitType, replaceVisitId: z.string().optional() }),
+  book_appointment: z.object({ callId: z.string().min(1), slotId: z.string().min(1), visitType }),
   request_refill: z.object({ callId: z.string().min(1), medication: z.string().min(1), isGlp1: z.boolean().optional() }),
   report_side_effects: z.object({ callId: z.string().min(1), description: z.string().min(1) }),
   request_prior_auth: z.object({ callId: z.string().min(1), medication: z.string().min(1), details: z.string().optional() }),
   medication_question: z.object({ callId: z.string().min(1), question: z.string().optional() }),
   offer_text_messaging: z.object({ callId: z.string().min(1) }),
+  transfer_to_department: z.object({
+    callId: z.string().min(1),
+    department: z.enum(DEPARTMENTS),
+    reason: z.string().max(300).optional(),
+    callerName: z.string().max(100).optional(),
+    callerPhone: z.string().max(30).optional(),
+  }),
+  request_new_patient_appointment: z.object({
+    callId: z.string().min(1),
+    firstName: z.string().trim().min(1).max(60),
+    lastName: z.string().trim().min(1).max(60),
+    dateOfBirth: z.string().refine(v => parseDob(v) !== null, 'Date of birth must be MM/DD/YYYY or YYYY-MM-DD'),
+    phone: z.string().refine(v => digits10(v) !== null, 'Enter a valid 10-digit phone number'),
+    preferredProvider: z.string().max(100).optional(),
+    reason: z.string().max(300).optional(),
+  }),
 } as const;
 
 export type ToolName = keyof typeof schemas;
@@ -104,13 +152,14 @@ export const TOOL_NAMES = Object.keys(schemas) as ToolName[];
 type Handler<K extends ToolName> = (a: z.infer<(typeof schemas)[K]>, pd: PracticeData, now: Date) => Promise<Record<string, unknown>>;
 
 const handlers: { [K in ToolName]: Handler<K> } = {
-  async identify_patient(a, pd) {
+  async identify_patient(a, pd, now) {
     sweep();
     const s = sessions.get(a.callId) ?? { callId: a.callId, phone: a.callerPhone, attempts: 0, expires: Date.now() + SESSION_TTL_MS };
     sessions.set(a.callId, s);
     if (s.attempts >= MAX_VERIFY_ATTEMPTS) {
       await logEvent(s, 'identify_patient', 'locked');
-      return { verified: false, action: 'transfer_front_desk', transferNumber: frontDesk(), say: 'I am not able to verify your information. Let me connect you with our front desk.' };
+      const route = await routeToDepartment('front_desk', now, { callId: a.callId, callerPhone: a.callerPhone, reason: 'could not verify identity' });
+      return { verified: false, ...route, say: route.action === 'transfer' ? 'I am not able to verify your information. Let me connect you with our front desk.' : route.say };
     }
     s.attempts += 1;
 
@@ -163,7 +212,7 @@ const handlers: { [K in ToolName]: Handler<K> } = {
     return {
       amount,
       asOf: asOf?.toISOString(),
-      say: `The recorded balance on your account is ${money(amount)}. Please note this may not include very recent payments. I am not able to take payments over the phone; our front desk can help with that.`,
+      say: `The recorded balance on your account is ${money(amount)}. Please note this may not include very recent payments. I am not able to take payments over the phone; if you have a billing question I can connect you with our billing team.`,
     };
   },
 
@@ -182,22 +231,16 @@ const handlers: { [K in ToolName]: Handler<K> } = {
     if (isNaN(from.getTime())) throw new ToolError('notBefore must be an ISO date');
     const slots = await pd.findSlots(s.patient, a.visitType, from < now ? now : from);
     await logEvent(s, 'find_slots', `${slots.length}_slots`);
-    if (!slots.length) return { slots: [], say: 'I do not see any openings in the next two weeks. I can send a message to our staff to call you with options.' };
+    if (!slots.length) return { slots: [], action: 'offer_scheduling_team', say: 'I do not see any openings in the next two weeks. I can connect you with our scheduling team who may have other options.', nextStep: 'Call transfer_to_department with department scheduling if the caller agrees.' };
     return {
       slots: slots.map(x => ({ slotId: x.slotId, when: spoken(x.start), provider: x.providerName })),
       say: 'Offer the caller up to three of these times, then call book_appointment with the slotId they choose.',
+      ifNoneSuitable: 'If the caller needs something sooner than these, wants a different provider than the one booked, or wants to reschedule an existing visit, call transfer_to_department with department scheduling.',
     };
   },
 
-  async book_appointment(a, pd, now) {
+  async book_appointment(a, pd) {
     const s = requireVerified(a.callId);
-    let replace: Visit | null = null;
-    if (a.replaceVisitId) {
-      // Only allow moving the patient's own upcoming appointment.
-      const { next } = await pd.getVisits(s.patient, now);
-      if (!next || next.id !== a.replaceVisitId) throw new ToolError('That appointment cannot be moved.');
-      replace = next;
-    }
     let visit: Visit;
     try {
       visit = await pd.book(s.patient, a.slotId, a.visitType);
@@ -205,9 +248,8 @@ const handlers: { [K in ToolName]: Handler<K> } = {
       await logEvent(s, 'book_appointment', 'failed');
       return { booked: false, say: 'I am sorry, that time is no longer available. Let me look for another one.' };
     }
-    if (replace) await pd.cancel(replace.id);
-    await logEvent(s, 'book_appointment', replace ? 'moved' : 'booked');
-    return { booked: true, when: spoken(visit.start), say: `You are scheduled for ${spoken(visit.start)}. ${replace ? 'I have cancelled your previous appointment. ' : ''}Is there anything else I can help with?` };
+    await logEvent(s, 'book_appointment', 'booked');
+    return { booked: true, when: spoken(visit.start), say: `You are scheduled for ${spoken(visit.start)}. Is there anything else I can help with?` };
   },
 
   async request_refill(a, pd, now) {
@@ -232,7 +274,7 @@ const handlers: { [K in ToolName]: Handler<K> } = {
     return {
       action: decision.action,
       say: decision.say,
-      ...(decision.action === 'offer_visit' ? { hasUpcoming: decision.hasUpcoming, upcomingVisitId: next?.id, upcomingVisit: next ? spoken(next.start) : null, nextStep: 'Use find_slots (visitType follow-up) and book_appointment; pass replaceVisitId to move the existing visit sooner.' } : {}),
+      ...(decision.action === 'offer_visit' ? { hasUpcoming: decision.hasUpcoming, upcomingVisitId: next?.id, upcomingVisit: next ? spoken(next.start) : null, nextStep: hasUpcomingText(decision.hasUpcoming) } : {}),
       // Entering the request into eClinicalWorks is not possible through NexHealth; staff do this from the message.
       ecwRefillCreated: false,
     };
@@ -262,7 +304,7 @@ const handlers: { [K in ToolName]: Handler<K> } = {
     return { level, action: 'schedule_or_urgent_care', say: 'Because of what you describe, I recommend being seen. I can book you an appointment, or if you cannot wait, please go to an urgent care. For an emergency, call 911. I have left a note for our staff.' };
   },
 
-  async request_prior_auth(a, pd) {
+  async request_prior_auth(a, pd, now) {
     const s = requireVerified(a.callId);
     await sendStaffMessage({
       type: 'prior-auth', callId: a.callId, patientId: s.localPatientId,
@@ -270,29 +312,75 @@ const handlers: { [K in ToolName]: Handler<K> } = {
       body: `Patient called about a prior authorization for ${a.medication}.${a.details ? `\nDetails: ${a.details}` : ''}`,
     });
     await logEvent(s, 'request_prior_auth', 'sent');
-    return { sent: true, say: 'I have sent your prior authorization request to our staff. They will work on it and contact you with an update.' };
+    const open = isOfficeOpen(now, loadOfficeHours());
+    return {
+      sent: true,
+      say: `I have sent your prior authorization request to our staff. They will work on it and contact you with an update.${open ? ' If you would like to speak with someone now, I can connect you with our medication and prior authorization team.' : ''}`,
+      ...(open ? { offerTransfer: { department: 'medications', transferNumber: extensionFor('medications', getPractice()) } } : {}),
+    };
   },
 
   async medication_question(a, pd, now) {
     const s = requireVerified(a.callId);
-    const { last, next } = await pd.getVisits(s.patient, now);
-    const providerId = next?.providerId ?? last?.providerId;
-    const prescriber = await resolvePrescriber(providerId);
     const open = isOfficeOpen(now, loadOfficeHours());
-    // Office hours: desk extension. After hours: cell phone, as requested in the protocol.
-    const number = open ? prescriber?.extension ?? prescriber?.cellPhone : prescriber?.cellPhone;
 
-    if (!number) {
+    // Office hours: the medication / prior authorization team.
+    if (open) {
+      const route = await routeToDepartment('medications', now, {
+        callId: a.callId, patient: s.patient, localPatientId: s.localPatientId, callerPhone: s.phone, priority: 'urgent',
+        reason: a.question ? `medication question: "${a.question}"` : 'medication question',
+      });
+      await logEvent(s, 'medication_question', route.action === 'transfer' ? 'transfer_medications' : 'message_medications');
+      return route;
+    }
+
+    // After hours: the prescriber's cell phone (the protocol's rule for medication clarification).
+    const { last, next } = await pd.getVisits(s.patient, now);
+    const prescriber = await resolvePrescriber(next?.providerId ?? last?.providerId);
+    const cell = prescriber?.cellPhone;
+    if (!cell) {
       await sendStaffMessage({
         type: 'med-question', callId: a.callId, patientId: s.localPatientId, priority: 'urgent',
         subject: `Medication question: ${s.patient.firstName} ${s.patient.lastName}`,
-        body: `Patient asked for medication clarification${a.question ? `: "${a.question}"` : '.'} No prescriber transfer number is configured; please call back.`,
+        body: `Patient asked for medication clarification after hours${a.question ? `: "${a.question}"` : '.'} No prescriber cell number is configured; please call back.`,
       });
-      await logEvent(s, 'medication_question', 'message_no_transfer_number');
-      return { action: 'message_sent', say: 'I have sent your question to your prescriber and they will call you back.' };
+      await logEvent(s, 'medication_question', 'message_no_cell');
+      return { action: 'message_taken', department: 'medications', say: 'Our office is closed right now. I have sent your question to your prescriber and they will call you back.' };
     }
-    await logEvent(s, 'medication_question', `transfer_${open ? 'extension' : 'cell'}`);
-    return { action: 'transfer', transferNumber: number, prescriber: prescriber?.name, say: `Let me connect you with ${prescriber?.name ?? 'your prescriber'} now. One moment please.` };
+    await logEvent(s, 'medication_question', 'transfer_cell');
+    return { action: 'transfer', department: 'medications', transferNumber: cell, transferType: 'phone', prescriber: prescriber?.name, say: `Our office is closed, so let me connect you with ${prescriber?.name ?? 'your prescriber'} directly. One moment please.` };
+  },
+
+  async transfer_to_department(a, _pd, now) {
+    const s = sessions.get(a.callId);
+    const route = await routeToDepartment(a.department, now, {
+      callId: a.callId, reason: a.reason, callerName: a.callerName, callerPhone: a.callerPhone ?? s?.phone,
+      patient: s?.patient, localPatientId: s?.localPatientId,
+    });
+    await logEvent({ callId: a.callId, phone: s?.phone ?? a.callerPhone, patientId: s?.localPatientId, verified: !!s?.patient }, 'transfer_to_department', `${a.department}_${route.action}`);
+    return route;
+  },
+
+  async request_new_patient_appointment(a, _pd, now) {
+    const open = isOfficeOpen(now, loadOfficeHours());
+    const dob = parseDob(a.dateOfBirth)!;
+    await sendStaffMessage({
+      type: 'new-patient', callId: a.callId,
+      subject: `New patient appointment request: ${a.firstName} ${a.lastName}`,
+      body: [
+        `Name: ${a.firstName} ${a.lastName}`, `Date of birth: ${dob}`, `Phone: ${a.phone}`,
+        a.preferredProvider ? `Prefers: ${a.preferredProvider}` : '', a.reason ? `Reason: ${a.reason}` : '',
+        open ? 'Caller was offered a live transfer to scheduling.' : 'Received after hours.',
+      ].filter(Boolean).join('\n'),
+    });
+    await logEvent({ callId: a.callId, phone: a.phone }, 'request_new_patient_appointment', open ? 'sent_offer_transfer' : 'sent_after_hours');
+    return {
+      sent: true,
+      say: open
+        ? `Thank you, ${a.firstName}. I have passed your information to our scheduling team. If you would like to book right now, I can connect you with them.`
+        : `Thank you, ${a.firstName}. Our office is closed, so I have passed your information to our scheduling team and they will call you when we reopen.`,
+      ...(open ? { offerTransfer: { department: 'scheduling', transferNumber: extensionFor('scheduling', getPractice()) } } : {}),
+    };
   },
 
   async offer_text_messaging(a) {
@@ -340,8 +428,10 @@ export async function runTool(name: string, rawArgs: unknown, now = new Date()):
   } catch (err) {
     if (err instanceof ToolError) return { status: 200, body: { error: err.message, say: 'I need to verify who I am speaking with first. Can I have your date of birth?' } };
     console.error(`Assistant tool ${name} failed:`, err);
-    // Fail safe: never leave the caller stuck.
-    return { status: 200, body: { error: 'tool_failed', action: 'transfer_front_desk', transferNumber: frontDesk(), say: 'I am having trouble with that right now. Let me connect you with our front desk.' } };
+    // Fail safe: never leave the caller stuck; hand them to a person (or take a message when closed).
+    const callId = typeof (rawArgs as { callId?: unknown })?.callId === 'string' ? (rawArgs as { callId: string }).callId : 'unknown';
+    const route = await routeToDepartment('front_desk', now, { callId, reason: `an automated step failed (${name})`, priority: 'urgent' }).catch(() => null);
+    return { status: 200, body: { error: 'tool_failed', ...(route ?? { action: 'message_taken', department: 'front_desk' }), say: 'I am having trouble with that right now. ' + (route?.action === 'transfer' ? 'Let me connect you with our front desk.' : 'Someone from our office will call you back.') } };
   }
 }
 

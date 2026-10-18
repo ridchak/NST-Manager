@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock, MapPin, Pencil, Phone, Printer } from 'lucide-react';
+import { Clock, MapPin, Pencil, Phone, PhoneForwarded, Printer } from 'lucide-react';
 import { errorMessage, practiceApi, type PracticeDetails } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 import Card, { CardBody, CardHeader } from './ui/Card';
@@ -22,11 +22,21 @@ const input = 'w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:
 type Form = {
   name: string; street: string; suite: string; city: string; state: string; zip: string; phone: string; fax: string; timezone: string;
   hours: Record<string, [string, string] | null>;
+  extFrontDesk: string; extScheduling: string; extMedications: string; extBilling: string; notificationEmail: string;
 };
+
+const DEPARTMENTS: Array<{ key: 'extFrontDesk' | 'extScheduling' | 'extMedications' | 'extBilling'; label: string; help: string }> = [
+  { key: 'extFrontDesk', label: 'Front desk', help: 'General questions, anything else, or asking for a person' },
+  { key: 'extScheduling', label: 'Scheduling', help: 'New patients, sooner appointments, rescheduling, or a different provider' },
+  { key: 'extMedications', label: 'Medications & prior authorization', help: 'Medication questions and prior authorizations' },
+  { key: 'extBilling', label: 'Billing', help: 'Billing questions' },
+];
 
 const toForm = (p: PracticeDetails): Form => ({
   name: p.name, street: p.street, suite: p.suite ?? '', city: p.city, state: p.state, zip: p.zip,
   phone: p.phoneDisplay, fax: p.faxDisplay ?? '', timezone: p.timezone, hours: p.hoursByDay,
+  extFrontDesk: p.extFrontDesk ?? '', extScheduling: p.extScheduling ?? '', extMedications: p.extMedications ?? '', extBilling: p.extBilling ?? '',
+  notificationEmail: p.notificationEmail ?? '',
 });
 
 export default function PracticePanel() {
@@ -38,7 +48,7 @@ export default function PracticePanel() {
   const canEdit = user?.role === 'superuser';
 
   const save = useMutation({
-    mutationFn: (f: Form) => practiceApi.save({ ...f, suite: f.suite || null, fax: f.fax || null }),
+    mutationFn: (f: Form) => practiceApi.save({ ...f, suite: f.suite || null, fax: f.fax || null, notificationEmail: f.notificationEmail || null }),
     onSuccess: () => { setForm(null); setError(''); qc.invalidateQueries({ queryKey: ['practice'] }); },
     onError: e => setError(errorMessage(e)),
   });
@@ -74,6 +84,23 @@ export default function PracticePanel() {
             </CardBody>
           </Card>
           <Card>
+            <CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><PhoneForwarded className="w-4 h-4 text-blue-600" />Call routing</h3></CardHeader>
+            <CardBody>
+              <table className="text-sm w-full">
+                <tbody>
+                  {DEPARTMENTS.map(d => (
+                    <tr key={d.key} className="border-b border-gray-50 last:border-0">
+                      <td className="py-2 pr-6 font-medium text-gray-900 whitespace-nowrap">{d.label}</td>
+                      <td className="py-2 pr-6 text-gray-900">{p[d.key] ? `ext ${p[d.key]}` : <span className="text-gray-400">not set</span>}</td>
+                      <td className="py-2 text-gray-500">{d.help}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-xs text-gray-500 mt-3">During office hours the phone assistant transfers callers to these extensions. After hours it takes a message instead. {p.notificationEmail ? `New-request notices are emailed to ${p.notificationEmail} (no patient details are ever included).` : 'No notification email is set.'}</p>
+            </CardBody>
+          </Card>
+          <Card>
             <CardHeader><h3 className="font-semibold text-gray-900 flex items-center gap-2"><Clock className="w-4 h-4 text-blue-600" />Office hours</h3></CardHeader>
             <CardBody>
               <table className="text-sm">
@@ -106,6 +133,21 @@ export default function PracticePanel() {
                   {ZONES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                   {!ZONES.some(z => z[0] === form.timezone) && <option value={form.timezone}>{form.timezone}</option>}
                 </select>
+              </label>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-2">Call routing (office extensions)</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {DEPARTMENTS.map(d => (
+                  <label key={d.key} className="block text-sm text-gray-700">{d.label}
+                    <input className={input} inputMode="numeric" placeholder="e.g. 101" value={form[d.key]} onChange={e => setForm({ ...form, [d.key]: e.target.value })} />
+                    <span className="text-xs text-gray-500">{d.help}</span>
+                  </label>
+                ))}
+              </div>
+              <label className="block text-sm text-gray-700 mt-3">Email for new-request notices
+                <input className={input} type="email" placeholder="info@yourpractice.com" value={form.notificationEmail} onChange={e => setForm({ ...form, notificationEmail: e.target.value })} />
+                <span className="text-xs text-gray-500">Contains no patient details, only that a request is waiting in the app. Requires email (SMTP) to be set up on the server.</span>
               </label>
             </div>
             <div>
