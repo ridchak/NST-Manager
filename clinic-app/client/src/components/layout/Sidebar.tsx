@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Calendar, TrendingDown,
-  FileText, Shield, Phone, Settings, Activity, X, Inbox, ScrollText,
+  FileText, Shield, Phone, Settings, X, Inbox, ScrollText,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../hooks/useAuth';
 import { CLINIC_NAME } from '../../config';
+import Logo from '../Logo';
 
 const nav: Array<{ to: string; label: string; icon: typeof Users; exact?: boolean; superuserOnly?: boolean }> = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -27,15 +28,11 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   return (
     <>
       {open && <div className="fixed inset-0 z-20 bg-black/40 lg:hidden" onClick={onClose} />}
-      <aside className={cn('fixed inset-y-0 left-0 z-30 w-64 bg-gray-900 flex flex-col transition-transform duration-300 lg:relative lg:translate-x-0 lg:z-auto', open ? 'translate-x-0' : '-translate-x-full')}>
-        <div className="flex items-center justify-between px-4 py-4 border-b border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center shrink-0">
-              <Activity className="w-5 h-5 text-white" />
-            </div>
-            <div className="text-white font-semibold text-sm leading-snug">{CLINIC_NAME}</div>
-          </div>
-          <button onClick={onClose} className="lg:hidden p-1 text-gray-400 hover:text-white rounded">
+      <aside className={cn('fixed inset-y-0 left-0 z-30 w-64 bg-blue-600 flex flex-col transition-transform duration-300 lg:relative lg:translate-x-0 lg:z-auto', open ? 'translate-x-0' : '-translate-x-full')}>
+        <div className="relative px-4 pt-5 pb-4 border-b border-white/15 text-center">
+          <Logo reversed className="w-40 mx-auto" />
+          <div className="mt-2 text-white font-semibold text-sm leading-snug">{CLINIC_NAME}</div>
+          <button onClick={onClose} className="lg:hidden absolute top-3 right-3 p-1 text-blue-100 hover:text-white rounded" aria-label="Close menu">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -48,7 +45,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
               onClick={onClose}
               className={({ isActive }) =>
                 cn('flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                  isActive ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800')
+                  isActive ? 'bg-white/20 text-white' : 'text-blue-100 hover:text-white hover:bg-white/10')
               }
             >
               <Icon className="w-5 h-5 shrink-0" />
@@ -56,8 +53,8 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             </NavLink>
           ))}
         </nav>
-        <div className="px-6 py-4 border-t border-gray-700">
-          <div className="text-xs text-gray-500">v1.0.0</div>
+        <div className="px-6 py-4 border-t border-white/15">
+          <div className="text-xs text-blue-200">v1.0.0</div>
         </div>
       </aside>
     </>

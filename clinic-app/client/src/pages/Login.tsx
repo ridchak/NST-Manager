@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { CLINIC_NAME } from '../config';
+import Logo from '../components/Logo';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Activity, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { cn } from '../lib/utils';
 
@@ -52,9 +53,7 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg">
-            <Activity className="w-8 h-8 text-white" />
-          </div>
+          <Logo className="w-56 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-900 leading-snug">{CLINIC_NAME}</h1>
           <p className="text-gray-500 mt-1">Staff sign-in</p>
         </div>

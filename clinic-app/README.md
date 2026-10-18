@@ -84,6 +84,16 @@ SUPERUSER_PASSWORD="a-long-passphrase" npm run create-superuser -- you@yourclini
 - Passwords must be at least 10 characters. Sessions last 12 hours.
 - Manage accounts at **Settings → Users** (superuser only). Accounts with appointment history are deactivated rather than deleted.
 
+## Branding
+
+- **Logo:** the icon mark only (no wordmark), as vector files in `client/public/`: `logo.svg` (full color, for light
+  backgrounds), `logo-reversed.svg` (white, for the navy sidebar) and `favicon.svg` (browser tab). Replace those files
+  to change the logo; nothing else needs editing.
+- **Colors:** from the brand sheet: navy `#075DA9`, light blue `#078ACB`, magenta `#C9427E`, yellow `#FDCB41`.
+  They are defined once in `client/tailwind.config.js`; the app's blue is mapped to the brand blues, so buttons,
+  links and highlights follow automatically.
+- **Name:** `CLINIC_NAME` (server) and `VITE_CLINIC_NAME` (web app).
+
 ## Audit log
 
 Superusers can see who viewed or changed which patient's record, and when, at **Audit Log**. It stores no
